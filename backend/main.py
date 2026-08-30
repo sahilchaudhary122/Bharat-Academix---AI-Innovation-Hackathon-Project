@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+
 from services.gemini_service import generate_response
+from api.lessons import router as lesson_router
+
 
 app = FastAPI(
     title="Personal AI Teacher API",
@@ -8,8 +11,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 class AITestRequest(BaseModel):
     prompt: str
+
 
 @app.get("/health")
 def health_check():
@@ -18,9 +23,14 @@ def health_check():
         "service": "Personal AI Teacher",
     }
 
+
 @app.post("/api/test-ai")
 def test_ai(request: AITestRequest):
     response = generate_response(request.prompt)
+
     return {
         "response": response
     }
+
+
+app.include_router(lesson_router)
