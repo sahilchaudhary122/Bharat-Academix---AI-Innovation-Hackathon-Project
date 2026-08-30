@@ -33,6 +33,7 @@
             Loading your learning dashboard...
         </div>
 
+
         <!-- Error -->
         <div id="error" class="error hidden"></div>
 
@@ -125,8 +126,8 @@
             </div>
 
             <p class="section-description">
-                Let your AI teacher create a lesson based on your learning level,
-                goals and available study time.
+                Let your AI teacher create a lesson based on your
+                learning level, goals and available study time.
             </p>
 
             <form id="lesson-form">
@@ -135,6 +136,7 @@
 
                     <div class="form-group">
                         <label for="subject">Subject</label>
+
                         <input
                             type="text"
                             id="subject"
@@ -143,8 +145,10 @@
                         >
                     </div>
 
+
                     <div class="form-group">
                         <label for="topic">Topic</label>
+
                         <input
                             type="text"
                             id="topic"
@@ -153,8 +157,12 @@
                         >
                     </div>
 
+
                     <div class="form-group">
-                        <label for="time">Available Time (minutes)</label>
+                        <label for="time">
+                            Available Time (minutes)
+                        </label>
+
                         <input
                             type="number"
                             id="time"
@@ -167,32 +175,147 @@
 
                 </div>
 
-                <button type="submit" id="generate-button">
+
+                <button
+                    type="submit"
+                    id="generate-button"
+                >
                     ✨ Generate Personalized Lesson
                 </button>
 
             </form>
 
+
             <!-- Generated Lesson -->
-            <div id="generated-lesson" class="generated-lesson hidden">
+            <div
+                id="generated-lesson"
+                class="generated-lesson hidden"
+            >
 
                 <div class="generated-header">
+
                     <span>🤖</span>
+
                     <div>
-                        <h2 id="lesson-title">Personalized Lesson</h2>
+                        <h2 id="lesson-title">
+                            Personalized Lesson
+                        </h2>
+
                         <p id="lesson-meta"></p>
                     </div>
+
                 </div>
 
+
+                <!-- Learning Objectives -->
                 <div class="objectives">
+
                     <h3>🎯 Learning Objectives</h3>
+
                     <ul id="objectives-list"></ul>
+
                 </div>
 
+
+                <!-- Lesson Segments -->
                 <div>
+
                     <h3>📖 Lesson Plan</h3>
+
                     <div id="segments-container"></div>
+
                 </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- AI Learning Media -->
+        <section
+            id="media-section"
+            class="card hidden"
+        >
+
+            <div class="section-title">
+
+                <span>🎬</span>
+
+                <h2>AI Learning Media</h2>
+
+            </div>
+
+
+            <p class="section-description">
+                Generate an educational visual, AI teacher voice,
+                and a complete learning video for this topic.
+            </p>
+
+
+            <!-- Generate Media Button -->
+            <button
+                type="button"
+                id="generate-media-button"
+            >
+                🎬 Generate Learning Video
+            </button>
+
+
+            <!-- Media Status -->
+            <p
+                id="media-status"
+                class="media-status"
+            ></p>
+
+
+            <!-- Generated Visual -->
+            <div
+                id="visual-container"
+                class="media-block hidden"
+            >
+
+                <h3>🖼️ Educational Visual</h3>
+
+                <img
+                    id="generated-visual"
+                    class="generated-visual"
+                    alt="AI generated educational visual"
+                >
+
+            </div>
+
+
+            <!-- Generated Audio -->
+            <div
+                id="audio-container"
+                class="media-block hidden"
+            >
+
+                <h3>🔊 AI Teacher Explanation</h3>
+
+                <audio
+                    id="generated-audio"
+                    class="generated-audio"
+                    controls
+                ></audio>
+
+            </div>
+
+
+            <!-- Generated Video -->
+            <div
+                id="video-container"
+                class="media-block hidden"
+            >
+
+                <h3>🎥 Personalized Learning Video</h3>
+
+                <video
+                    id="generated-video"
+                    class="generated-video"
+                    controls
+                    playsinline
+                ></video>
 
             </div>
 
@@ -203,11 +326,16 @@
 
     <!-- Footer -->
     <footer>
-        <p>Personal AI Teacher • Powered by FastAPI, Supabase & Gemini</p>
+
+        <p>
+            Personal AI Teacher • Powered by FastAPI,
+            Supabase & Gemini
+        </p>
+
     </footer>
 
 
-    <script src="script.js"></script>
+    <script src="script.js?v=2"></script>
 
 </body>
 </html>

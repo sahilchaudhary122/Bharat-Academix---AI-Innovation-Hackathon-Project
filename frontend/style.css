@@ -1,6 +1,6 @@
-/* ================================
+/* 
    General
-================================ */
+ */
 
 * {
     margin: 0;
@@ -16,9 +16,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Header
-================================ */
+ */
 
 .header {
     background: linear-gradient(135deg, #2563eb, #4f46e5);
@@ -58,9 +58,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Main Container
-================================ */
+ */
 
 .container {
     width: min(1100px, 92%);
@@ -68,9 +68,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Cards
-================================ */
+ */
 
 .card {
     background: white;
@@ -103,9 +103,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Student Profile
-================================ */
+ */
 
 .profile-grid {
     display: grid;
@@ -145,9 +145,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Progress
-================================ */
+ */
 
 .progress-card {
     border: 1px solid #e5e7eb;
@@ -194,9 +194,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Assessment
-================================ */
+ */
 
 .assessment-table {
     width: 100%;
@@ -227,9 +227,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Previous Lessons
-================================ */
+ */
 
 .lesson-card {
     padding: 18px;
@@ -252,9 +252,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Lesson Generator
-================================ */
+ */
 
 .lesson-generator {
     border-top: 4px solid #4f46e5;
@@ -314,9 +314,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Generated Lesson
-================================ */
+ */
 
 .generated-lesson {
     margin-top: 30px;
@@ -393,9 +393,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Loading / Error
-================================ */
+ */
 
 .loading {
     text-align: center;
@@ -417,9 +417,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Empty State
-================================ */
+ */
 
 .empty {
     color: #9ca3af;
@@ -428,9 +428,9 @@ body {
 }
 
 
-/* ================================
+/* 
    Footer
-================================ */
+ */
 
 footer {
     text-align: center;
@@ -440,9 +440,9 @@ footer {
 }
 
 
-/* ================================
+/* 
    Responsive
-================================ */
+ */
 
 @media (max-width: 800px) {
 
@@ -485,4 +485,39 @@ footer {
     .assessment-table td {
         padding: 9px 5px;
     }
+}
+
+/* 
+   AI Learning Media
+ */
+
+.media-status {
+    margin: 15px 0;
+    font-weight: 600;
+}
+
+.media-block {
+    margin-top: 25px;
+}
+
+.generated-visual {
+    display: block;
+    width: 100%;
+    max-width: 1000px;
+    margin-top: 15px;
+    border-radius: 12px;
+}
+
+.generated-audio {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.generated-video {
+    display: block;
+    width: 100%;
+    max-width: 1000px;
+    margin-top: 15px;
+    border-radius: 12px;
+    background: #000;
 }
