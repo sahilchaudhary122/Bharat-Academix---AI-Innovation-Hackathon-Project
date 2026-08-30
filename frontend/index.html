@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Personal AI Teacher</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div>
+            <h1>Personal AI Teacher</h1>
+            <p>Your personalized learning dashboard</p>
+        </div>
+
+        <div class="status">
+            <span class="status-dot"></span>
+            AI Teacher
+        </div>
+    </header>
+
+
+    <!-- Main Dashboard -->
+    <main class="container">
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            Loading your learning dashboard...
+        </div>
+
+        <!-- Error -->
+        <div id="error" class="error hidden"></div>
+
+
+        <!-- Student Profile -->
+        <section id="student-section" class="card hidden">
+
+            <div class="section-title">
+                <span>👨‍🎓</span>
+                <h2>Student Profile</h2>
+            </div>
+
+            <div class="profile-grid">
+
+                <div class="profile-item">
+                    <span class="label">Name</span>
+                    <strong id="student-name">-</strong>
+                </div>
+
+                <div class="profile-item">
+                    <span class="label">Grade</span>
+                    <strong id="student-grade">-</strong>
+                </div>
+
+                <div class="profile-item">
+                    <span class="label">Level</span>
+                    <strong id="student-level">-</strong>
+                </div>
+
+                <div class="profile-item">
+                    <span class="label">Preferred Language</span>
+                    <strong id="student-language">-</strong>
+                </div>
+
+            </div>
+
+            <div class="learning-goal">
+                <span class="label">Learning Goal</span>
+                <p id="student-goal">-</p>
+            </div>
+
+        </section>
+
+
+        <!-- Progress -->
+        <section id="progress-section" class="card hidden">
+
+            <div class="section-title">
+                <span>📊</span>
+                <h2>Learning Progress</h2>
+            </div>
+
+            <div id="progress-container"></div>
+
+        </section>
+
+
+        <!-- Assessments -->
+        <section id="assessment-section" class="card hidden">
+
+            <div class="section-title">
+                <span>📝</span>
+                <h2>Assessment History</h2>
+            </div>
+
+            <div id="assessment-container"></div>
+
+        </section>
+
+
+        <!-- Previous Lessons -->
+        <section id="lessons-section" class="card hidden">
+
+            <div class="section-title">
+                <span>📚</span>
+                <h2>Previous Lessons</h2>
+            </div>
+
+            <div id="lessons-container"></div>
+
+        </section>
+
+
+        <!-- Generate Personalized Lesson -->
+        <section class="card lesson-generator">
+
+            <div class="section-title">
+                <span>✨</span>
+                <h2>Generate Personalized Lesson</h2>
+            </div>
+
+            <p class="section-description">
+                Let your AI teacher create a lesson based on your learning level,
+                goals and available study time.
+            </p>
+
+            <form id="lesson-form">
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+                        <label for="subject">Subject</label>
+                        <input
+                            type="text"
+                            id="subject"
+                            value="Physics"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="topic">Topic</label>
+                        <input
+                            type="text"
+                            id="topic"
+                            value="Simple Motion"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="time">Available Time (minutes)</label>
+                        <input
+                            type="number"
+                            id="time"
+                            value="30"
+                            min="1"
+                            max="180"
+                            required
+                        >
+                    </div>
+
+                </div>
+
+                <button type="submit" id="generate-button">
+                    ✨ Generate Personalized Lesson
+                </button>
+
+            </form>
+
+            <!-- Generated Lesson -->
+            <div id="generated-lesson" class="generated-lesson hidden">
+
+                <div class="generated-header">
+                    <span>🤖</span>
+                    <div>
+                        <h2 id="lesson-title">Personalized Lesson</h2>
+                        <p id="lesson-meta"></p>
+                    </div>
+                </div>
+
+                <div class="objectives">
+                    <h3>🎯 Learning Objectives</h3>
+                    <ul id="objectives-list"></ul>
+                </div>
+
+                <div>
+                    <h3>📖 Lesson Plan</h3>
+                    <div id="segments-container"></div>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- Footer -->
+    <footer>
+        <p>Personal AI Teacher • Powered by FastAPI, Supabase & Gemini</p>
+    </footer>
+
+
+    <script src="script.js"></script>
+
+</body>
+</html>

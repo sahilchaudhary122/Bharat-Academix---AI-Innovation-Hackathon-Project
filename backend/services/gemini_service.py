@@ -99,3 +99,31 @@ PERSONALIZATION REQUIREMENTS:
     )
 
     return response.parsed
+
+def translate_text(text: str, target_language: str) -> str:
+    """
+    Translate educational text into the requested language
+    using Gemini.
+    """
+
+    if not text.strip():
+        raise ValueError("Text cannot be empty.")
+
+    if not target_language.strip():
+        raise ValueError("Target language cannot be empty.")
+
+    prompt = f"""
+Translate the following educational content into {target_language}.
+
+Requirements:
+1. Preserve the original meaning.
+2. Use simple and clear language suitable for students.
+3. Keep formulas, numbers, units, and technical terms accurate.
+4. Do not add explanations that are not present in the original.
+5. Return only the translated text.
+
+TEXT:
+{text}
+"""
+
+    return generate_response(prompt).strip()

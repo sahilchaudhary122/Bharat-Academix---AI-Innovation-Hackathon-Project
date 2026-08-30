@@ -1,7 +1,9 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from api.students import router as student_router
 from services.gemini_service import generate_response
+from api.students import router as student_router
+from api.media import router as media_router
 from api.lessons import router as lesson_router
 from api.progress import router as progress_router
 from api.assessment import router as assessment_router
@@ -12,7 +14,13 @@ app = FastAPI(
     description="Backend API for the Personal AI Teacher",
     version="1.0.0",
 )
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class AITestRequest(BaseModel):
     prompt: str
@@ -37,6 +45,7 @@ def test_ai(request: AITestRequest):
 
 app.include_router(lesson_router)
 app.include_router(student_router)
+app.include_router(media_router)
 app.include_router(progress_router)
 app.include_router(assessment_router)
 app.include_router(dashboard_router)
