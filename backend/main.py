@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-
+from api.students import router as student_router
 from services.gemini_service import generate_response
 from api.lessons import router as lesson_router
-
+from api.progress import router as progress_router
+from api.assessment import router as assessment_router
+from api.dashboard import router as dashboard_router
 
 app = FastAPI(
     title="Personal AI Teacher API",
@@ -34,3 +36,7 @@ def test_ai(request: AITestRequest):
 
 
 app.include_router(lesson_router)
+app.include_router(student_router)
+app.include_router(progress_router)
+app.include_router(assessment_router)
+app.include_router(dashboard_router)
