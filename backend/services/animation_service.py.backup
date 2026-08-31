@@ -1,0 +1,767 @@
+import json
+import os
+import re
+import subprocess
+import uuid
+from pathlib import Path
+
+from dotenv import load_dotenv
+from groq import Groq
+
+
+# ============================================================
+# ENVIRONMENT
+# ============================================================
+
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY is not configured.")
+
+client = Groq(api_key=GROQ_API_KEY)
+
+
+# ============================================================
+# DIRECTORIES
+# ============================================================
+
+BASE_DIR = (
+    Path(__file__).resolve().parent.parent
+)
+
+MEDIA_DIR = (
+    BASE_DIR
+    / "media"
+    / "generated"
+)
+
+ANIMATION_DIR = (
+    MEDIA_DIR
+    / "animations"
+)
+
+MEDIA_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+ANIMATION_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+
+# ============================================================
+# AI ANIMATION PLAN
+# ============================================================
+
+def generate_animation_plan(
+    subject: str,
+    topic: str,
+    grade: str,
+    concept: str,
+) -> dict:
+
+    prompt = f"""
+You are an expert educational animation director.
+
+Create a visual animation plan for:
+
+Subject: {subject}
+Topic: {topic}
+Grade: {grade}
+Concept: {concept}
+
+The animation will be rendered programmatically using Manim.
+
+The animation must be genuinely educational and visually explain
+the user's topic.
+
+IMPORTANT:
+- The topic is dynamic.
+- Do NOT assume a specific topic.
+- Do NOT return a fixed animation.
+- Choose visual objects appropriate for the actual topic.
+- Use movement whenever movement helps explain the concept.
+- Use diagrams, graphs, formulas, arrows, particles, shapes,
+  processes, or simulations when appropriate.
+- Use 3 to 6 scenes.
+- Each scene should teach one clear idea.
+
+For every scene provide:
+
+title
+description
+animation_type
+duration
+objects
+actions
+labels
+formula
+
+Allowed animation_type values:
+
+diagram
+motion
+graph
+formula
+process
+comparison
+simulation
+concept
+
+Possible objects include, but are NOT limited to:
+
+spring
+mass
+ball
+earth
+object
+arrow
+axis
+graph
+wave
+particle
+circle
+rectangle
+triangle
+line
+circuit
+battery
+resistor
+array
+tree
+leaf
+molecule
+atom
+text
+
+Possible actions include, but are NOT limited to:
+
+appear
+disappear
+move
+move_up
+move_down
+move_left
+move_right
+oscillate
+rotate
+draw
+transform
+grow
+shrink
+trace
+bounce
+highlight
+connect
+
+Choose objects and actions based on the ACTUAL topic.
+
+For example:
+
+Simple Harmonic Motion:
+objects could include spring, mass, equilibrium_line
+and actions could include oscillate, move_up, move_down.
+
+Projectile Motion:
+objects could include ball, trajectory, ground
+and actions could include move, trace.
+
+Waves:
+objects could include wave, axis, particle
+and actions could include oscillate, trace.
+
+Do NOT copy these examples unless they match the user's topic.
+
+Return ONLY valid JSON.
+
+Format:
+
+{{
+    "title": "...",
+    "summary": "...",
+    "scenes": [
+        {{
+            "title": "...",
+            "description": "...",
+            "animation_type": "...",
+            "duration": 8,
+            "objects": [
+                {{
+                    "type": "...",
+                    "name": "...",
+                    "label": "..."
+                }}
+            ],
+            "actions": [
+                {{
+                    "target": "...",
+                    "action": "...",
+                    "duration": 4
+                }}
+            ],
+            "labels": [
+                "..."
+            ],
+            "formula": "..."
+        }}
+    ]
+}}
+"""
+
+    response = client.chat.completions.create(
+        model="qwen/qwen3.8-27b",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are an educational animation planner. "
+                    "Return only valid JSON."
+                ),
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ],
+        temperature=0.4,
+        max_tokens=4000,
+    )
+
+    text = response.choices[0].message.content
+
+    if not text:
+        raise RuntimeError(
+            "Groq returned an empty animation plan."
+        )
+
+    text = text.strip()
+
+    if text.startswith("```"):
+        text = re.sub(
+            r"^```(?:json)?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"\s*```$",
+            "",
+            text,
+        )
+
+    try:
+        plan = json.loads(text)
+
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "Groq returned invalid JSON:\n" + text
+        ) from exc
+
+    if not isinstance(plan, dict):
+        raise RuntimeError(
+            "Animation plan must be a JSON object."
+        )
+
+    if not isinstance(plan.get("scenes"), list):
+        raise RuntimeError(
+            "Animation plan must contain a scenes array."
+        )
+
+    if not plan["scenes"]:
+        raise RuntimeError(
+            "Groq returned no animation scenes."
+        )
+
+    return plan
+
+# ============================================================
+# MANIM SCRIPT GENERATION
+# ============================================================
+
+def _escape_python_string(value: str) -> str:
+
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", " ")
+    )
+
+
+def create_manim_script(
+    plan: dict,
+    subject: str,
+    topic: str,
+) -> Path:
+
+    safe_subject = _escape_python_string(
+        subject
+    )
+
+    safe_topic = _escape_python_string(
+        topic
+    )
+
+    scenes_code = []
+
+    for index, scene in enumerate(
+        plan["scenes"]
+    ):
+
+        title = _escape_python_string(
+            scene.get(
+                "title",
+                f"Scene {index + 1}"
+            )
+        )
+
+        description = _escape_python_string(
+            scene.get(
+                "description",
+                ""
+            )
+        )
+
+        animation_type = _escape_python_string(
+            scene.get(
+                "animation_type",
+                "concept"
+            )
+        )
+
+        duration = int(
+            scene.get(
+                "duration",
+                6
+            )
+        )
+
+        duration = max(
+            4,
+            min(
+                duration,
+                15
+            )
+        )
+
+        # ----------------------------------------------------
+        # Create a visual behavior based on AI's
+        # animation_type.
+        # ----------------------------------------------------
+
+        if animation_type == "motion":
+
+            visual_code = f"""
+        moving_object = Circle(
+            radius=0.5
+        )
+
+        path = Line(
+            LEFT * 3,
+            RIGHT * 3
+        )
+
+        self.play(
+            Create(path),
+            FadeIn(moving_object)
+        )
+
+        self.play(
+            MoveAlongPath(
+                moving_object,
+                path
+            ),
+            run_time={duration}
+        )
+"""
+
+        elif animation_type == "graph":
+
+            visual_code = f"""
+        axes = Axes(
+            x_range=[-5, 5, 1],
+            y_range=[-2, 2, 1],
+            x_length=8,
+            y_length=4
+        )
+
+        graph = axes.plot(
+            lambda x: __import__("math").sin(x),
+            color=BLUE
+        )
+
+        self.play(
+            Create(axes)
+        )
+
+        self.play(
+            Create(graph),
+            run_time={duration}
+        )
+"""
+
+        elif animation_type == "formula":
+
+            visual_code = f"""
+        formula = MathTex(
+            r"F = m a"
+        )
+
+        self.play(
+            Write(formula)
+        )
+
+        self.play(
+            formula.animate.scale(1.5),
+            run_time={duration}
+        )
+"""
+
+        elif animation_type == "process":
+
+            visual_code = f"""
+        box1 = RoundedRectangle(
+            width=2.4,
+            height=1.2
+        )
+
+        box2 = RoundedRectangle(
+            width=2.4,
+            height=1.2
+        )
+
+        arrow = Arrow(
+            LEFT,
+            RIGHT
+        )
+
+        group = VGroup(
+            box1,
+            arrow,
+            box2
+        ).arrange(
+            RIGHT,
+            buff=0.5
+        )
+
+        self.play(
+            Create(group)
+        )
+
+        self.play(
+            box1.animate.shift(UP * 0.5),
+            run_time={duration // 2}
+        )
+
+        self.play(
+            box1.animate.shift(DOWN * 0.5),
+            run_time={duration // 2}
+        )
+"""
+
+        elif animation_type == "comparison":
+
+            visual_code = f"""
+        left = Circle(
+            radius=1
+        )
+
+        right = Square(
+            side_length=2
+        )
+
+        comparison = VGroup(
+            left,
+            right
+        ).arrange(
+            RIGHT,
+            buff=2
+        )
+
+        self.play(
+            Create(comparison)
+        )
+
+        self.play(
+            left.animate.scale(1.4),
+            right.animate.scale(0.7),
+            run_time={duration}
+        )
+"""
+
+        elif animation_type == "simulation":
+
+            visual_code = f"""
+        particle = Dot()
+
+        circle = Circle(
+            radius=2
+        )
+
+        self.play(
+            Create(circle),
+            FadeIn(particle)
+        )
+
+        self.play(
+            MoveAlongPath(
+                particle,
+                circle
+            ),
+            run_time={duration}
+        )
+"""
+
+        else:
+
+            visual_code = f"""
+        concept_box = RoundedRectangle(
+            width=6,
+            height=3
+        )
+
+        self.play(
+            Create(concept_box)
+        )
+
+        self.play(
+            concept_box.animate.scale(1.15),
+            run_time={duration // 2}
+        )
+
+        self.play(
+            concept_box.animate.scale(1 / 1.15),
+            run_time={duration // 2}
+        )
+"""
+
+        scene_code = f"""
+        # ==================================================
+        # AI GENERATED SCENE {index + 1}
+        # ==================================================
+
+        scene_title = Text(
+            "{title}",
+            font_size=32
+        )
+
+        scene_description = Text(
+            "{description}",
+            font_size=18
+        )
+
+        scene_description.scale_to_fit_width(
+            11
+        )
+
+        scene_title.to_edge(
+            UP
+        )
+
+        scene_description.next_to(
+            scene_title,
+            DOWN,
+            buff=0.25
+        )
+
+        scene_type = Text(
+            "AI animation type: {animation_type}",
+            font_size=16
+        )
+
+        scene_type.to_edge(
+            DOWN
+        )
+
+        self.play(
+            Write(scene_title),
+            FadeIn(scene_description),
+            FadeIn(scene_type)
+        )
+
+{visual_code}
+
+        self.play(
+            FadeOut(
+                VGroup(
+                    scene_title,
+                    scene_description,
+                    scene_type
+                )
+            )
+        )
+"""
+
+        scenes_code.append(
+            scene_code
+        )
+
+    script = f'''
+from manim import *
+
+
+class AIAnimatedLesson(Scene):
+
+    def construct(self):
+
+        subject = Text(
+            "{safe_subject}",
+            font_size=28
+        )
+
+        topic = Text(
+            "{safe_topic}",
+            font_size=42
+        )
+
+        header = VGroup(
+            subject,
+            topic
+        ).arrange(
+            DOWN,
+            buff=0.25
+        )
+
+        self.play(
+            Write(subject),
+            Write(topic)
+        )
+
+        self.wait(2)
+
+        self.play(
+            FadeOut(header)
+        )
+
+{"".join(scenes_code)}
+'''
+
+    filename = (
+        f"animation_{uuid.uuid4().hex}.py"
+    )
+
+    script_path = (
+        ANIMATION_DIR
+        / filename
+    )
+
+    script_path.write_text(
+        script,
+        encoding="utf-8"
+    )
+
+    return script_path
+
+
+# ============================================================
+# RENDER WITH MANIM
+# ============================================================
+
+def render_animation(
+    plan: dict,
+    subject: str,
+    topic: str,
+) -> str:
+
+    script_path = create_manim_script(
+        plan=plan,
+        subject=subject,
+        topic=topic,
+    )
+
+    render_media_dir = (
+        ANIMATION_DIR
+        / "manim_media"
+    )
+
+    render_media_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    command = [
+        "manim",
+        "-ql",
+        "--media_dir",
+        str(render_media_dir),
+        str(script_path),
+        "AIAnimatedLesson",
+    ]
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+
+        raise RuntimeError(
+            "Manim rendering failed:\n\n"
+            + result.stderr[-8000:]
+        )
+
+    video_candidates = list(
+        render_media_dir.rglob(
+            "AIAnimatedLesson.mp4"
+        )
+    )
+
+    if not video_candidates:
+
+        raise FileNotFoundError(
+            "Manim finished but no MP4 was found."
+        )
+
+    source_video = (
+        video_candidates[-1]
+    )
+
+    final_name = (
+        f"ai_animation_{uuid.uuid4()}.mp4"
+    )
+
+    final_video = (
+        MEDIA_DIR
+        / final_name
+    )
+
+    source_video.replace(
+        final_video
+    )
+
+    return str(final_video)
+
+
+# ============================================================
+# COMPLETE PIPELINE
+# ============================================================
+
+def generate_ai_animation(
+    subject: str,
+    topic: str,
+    grade: str,
+    concept: str,
+) -> tuple[str, dict]:
+
+    plan = generate_animation_plan(
+        subject=subject,
+        topic=topic,
+        grade=grade,
+        concept=concept,
+    )
+
+    video_file = render_animation(
+        plan=plan,
+        subject=subject,
+        topic=topic,
+    )
+
+    return (
+        video_file,
+        plan,
+    )

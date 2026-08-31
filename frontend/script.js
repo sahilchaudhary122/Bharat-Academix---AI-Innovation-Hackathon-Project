@@ -956,77 +956,101 @@ generateMediaButton.addEventListener(
             // 3. Generate Video
             
 
-            mediaStatus.textContent =
-                "Creating personalized lesson video...";
+mediaStatus.textContent =
+    "Creating AI animated lesson video...";
 
-            const videoResponse =
-                await fetch(
-                    `${API_BASE}/api/video/generate`,
-                    {
-                        method: "POST",
+const animationResponse =
+    await fetch(
+        `${API_BASE}/api/video/generate-animation`,
+        {
+            method: "POST",
 
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
+            headers: {
+                "Content-Type":
+                    "application/json"
+            },
 
-                        body:
-                            JSON.stringify({
+            body:
+                JSON.stringify({
 
-                                visual_file:
-                                    visualFile,
+                    subject:
+                        subject,
 
-                                audio_file:
-                                    audioFile,
+                    topic:
+                        topic,
 
-                                duration_seconds:
-                                    300
-                            })
-                    }
-                );
+                    grade:
+                        grade,
 
-            if (!videoResponse.ok) {
+                    concept:
+                        concept
+                })
+        }
+    );
 
-                const errorData =
-                    await videoResponse.json();
+if (!animationResponse.ok) {
 
-                throw new Error(
-                    errorData.detail ||
-                    "Video generation failed."
-                );
-            }
+    let errorMessage =
+        "AI animation generation failed.";
 
-            const videoData =
-                await videoResponse.json();
+    try {
 
-            const videoFile =
-                videoData.output_file;
+        const errorData =
+            await animationResponse.json();
 
-            if (!videoFile) {
-                throw new Error(
-                    "Video generation returned no file."
-                );
-            }
+        errorMessage =
+            errorData.detail ||
+            errorMessage;
 
-            const videoFilename =
-                getFilename(videoFile);
+    } catch (e) {
 
-            generatedVideo.src =
-                `${API_BASE}/media/${videoFilename}`;
+        console.error(
+            "Could not read animation error:",
+            e
+        );
+    }
 
-            generatedVideo.load();
+    throw new Error(
+        errorMessage
+    );
+}
 
-            videoContainer.classList.remove(
-                "hidden"
-            );
+const animationData =
+    await animationResponse.json();
 
-            mediaStatus.textContent =
-                "AI learning media generated successfully!";
+console.log(
+    "AI animation response:",
+    animationData
+);
 
-            mediaSection.scrollIntoView({
-                behavior: "smooth",
-                block: "start"
-            });
+const videoUrl =
+    animationData.video_url;
+
+if (!videoUrl) {
+
+    throw new Error(
+        "AI animation returned no video URL."
+    );
+}
+
+generatedVideo.src =
+    videoUrl.startsWith("http")
+        ? videoUrl
+        : `${API_BASE}${videoUrl}`;
+
+generatedVideo.load();
+
+videoContainer.classList.remove(
+    "hidden"
+);
+
+mediaStatus.textContent =
+    "AI animated learning video generated successfully!";
+
+mediaSection.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+});
 
         } catch (error) {
 
@@ -1035,12 +1059,13 @@ generateMediaButton.addEventListener(
                 error
             );
 
+            showError(
+                error.message ||
+                "AI learning media generation failed."
+            );
+
             mediaStatus.textContent =
                 "Media generation failed.";
-
-            showError(
-                error.message
-            );
 
         } finally {
 
@@ -1048,11 +1073,10 @@ generateMediaButton.addEventListener(
                 false;
 
             generateMediaButton.textContent =
-                "🎬 Generate Learning Video";
+                "✨ Generate Learning Media";
         }
     }
 );
-
 
 
 // Get Filename From Backend Path
