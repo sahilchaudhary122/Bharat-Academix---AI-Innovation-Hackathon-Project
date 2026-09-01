@@ -1,9 +1,11 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import uuid
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -16,7 +18,6 @@ from groq import Groq
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY is not configured.")
 
@@ -28,24 +29,151 @@ client = Groq(api_key=GROQ_API_KEY)
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 MEDIA_DIR = BASE_DIR / "media" / "generated"
-
 ANIMATION_DIR = MEDIA_DIR / "animations"
+MANIM_MEDIA_DIR = ANIMATION_DIR / "manim_media"
 
-MEDIA_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-ANIMATION_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+ANIMATION_DIR.mkdir(parents=True, exist_ok=True)
+MANIM_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
-# AI ANIMATION PLANNER
+# OPTIONAL TTS INTEGRATION
+# ============================================================
+
+try:
+    from services.tts_service import generate_speech
+except Exception:
+    generate_speech = None
+
+
+# ============================================================
+# GENERAL HELPERS
+# ============================================================
+
+def _safe_name(value: Any, fallback: str = "object") -> str:
+    name = re.sub(r"[^a-zA-Z0-9_]", "_", str(value or ""))
+    name = re.sub(r"_+", "_", name).strip("_")
+    if not name:
+        name = fallback
+    if name[0].isdigit():
+        name = "_" + name
+    return name
+
+
+def _short_text(value: Any, limit: int) -> str:
+    text = str(value or "").replace("\n", " ").replace("\r", " ").strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(1, limit - 1)].rstrip() + "…"
+
+
+def _safe_duration(value: Any, default: float = 1.0) -> float:
+    try:
+        duration = float(value)
+    except (TypeError, ValueError):
+        duration = default
+    return max(0.45, min(duration, 3.0))
+
+
+def _py_string(value: Any) -> str:
+    """Return a safe Python literal for generated source code."""
+    return repr(str(value or ""))
+
+
+# ============================================================
+# LATEX FIXER
+# ============================================================
+
+def _latex_safe_formula(value: Any) -> str:
+    """
+    Normalize AI-generated formulas before passing them to MathTex.
+
+    This is the important fix for errors such as:
+        M₁ / M₂ / r² / × / ∝
+
+    It also prevents accidental double backslashes from JSON output.
+    """
+
+    formula = str(value or "").strip()
+    if not formula:
+        return ""
+
+    # AI/JSON may return double escaped LaTeX.
+    formula = formula.replace("\\\\", "\\")
+
+    # Unicode subscripts.
+    subscript = {
+        "₀": "_0", "₁": "_1", "₂": "_2", "₃": "_3",
+        "₄": "_4", "₅": "_5", "₆": "_6", "₇": "_7",
+        "₈": "_8", "₉": "_9",
+    }
+    for char, replacement in subscript.items():
+        formula = formula.replace(char, replacement)
+
+    # Unicode superscripts.
+    superscript = {
+        "⁰": "^0", "¹": "^1", "²": "^2", "³": "^3",
+        "⁴": "^4", "⁵": "^5", "⁶": "^6", "⁷": "^7",
+        "⁸": "^8", "⁹": "^9",
+    }
+    for char, replacement in superscript.items():
+        formula = formula.replace(char, replacement)
+
+    replacements = {
+        "×": r"\times ",
+        "÷": r"\div ",
+        "±": r"\pm ",
+        "≤": r"\leq ",
+        "≥": r"\geq ",
+        "≠": r"\neq ",
+        "≈": r"\approx ",
+        "∝": r"\propto ",
+        "∞": r"\infty ",
+        "→": r"\rightarrow ",
+        "←": r"\leftarrow ",
+        "↔": r"\leftrightarrow ",
+        "α": r"\alpha ",
+        "β": r"\beta ",
+        "γ": r"\gamma ",
+        "δ": r"\delta ",
+        "θ": r"\theta ",
+        "λ": r"\lambda ",
+        "μ": r"\mu ",
+        "π": r"\pi ",
+        "ρ": r"\rho ",
+        "σ": r"\sigma ",
+        "φ": r"\phi ",
+        "ω": r"\omega ",
+        "Ω": r"\Omega ",
+        "Δ": r"\Delta ",
+    }
+    for char, replacement in replacements.items():
+        formula = formula.replace(char, replacement)
+
+    # Common plain-text multiplication. Do not alter LaTeX commands.
+    formula = re.sub(r"\s*\*\s*", r" \\cdot ", formula)
+
+    # Convert simple ^2/r^2 etc. to valid compact TeX.
+    formula = re.sub(r"([A-Za-z0-9)])\^([0-9A-Za-z]+)", r"\1^{\2}", formula)
+
+    # Convert M_1 to M_{1}; same for x_12.
+    formula = re.sub(r"([A-Za-z])_([0-9]+)", r"\1_{\2}", formula)
+
+    # Strip accidental Markdown math delimiters.
+    formula = formula.replace("$$", "").strip()
+    if formula.startswith("$") and formula.endswith("$"):
+        formula = formula[1:-1].strip()
+
+    # Avoid literal newlines in generated source.
+    formula = re.sub(r"\s+", " ", formula).strip()
+
+    return formula
+
+
+# ============================================================
+# AI PLAN GENERATION
 # ============================================================
 
 def generate_animation_plan(
@@ -54,122 +182,78 @@ def generate_animation_plan(
     grade: str,
     concept: str,
 ) -> dict:
+    """Generate a topic-specific visual lesson plan."""
 
     prompt = f"""
 You are an expert educational animation director.
 
-Create a visual animation plan for:
-
+Create an animation plan for:
 Subject: {subject}
 Topic: {topic}
 Grade: {grade}
 Concept: {concept}
 
-The animation will be rendered programmatically using Manim.
+The animation is rendered by Python Manim.
 
-The animation must genuinely explain the user's topic.
+CRITICAL RULES:
+- The topic can be ANY subject. Do not assume a fixed topic.
+- Choose visuals that actually explain this topic.
+- Physics: diagrams, forces, formulas, simulations, graphs.
+- Mathematics: equations, graphs, step-by-step transformations.
+- Biology: structures, labels, processes.
+- History: timelines, maps, events.
+- Programming: code, flow, output, architecture.
+- Use 3 to 5 scenes.
+- Each scene teaches exactly one main idea.
+- Prefer visuals over paragraphs.
+- Object labels must be very short: normally 1-2 words or symbols.
+- Do not repeat object labels as scene labels.
+- Use at most 6 objects per scene.
+- Use at most 6 actions per scene.
+- Titles must be short.
+- Descriptions must be short.
+- Narration must be natural spoken English and 1-3 short sentences.
+- Do not put equations in narration.
+- Formulas MUST use simple LaTeX such as M_1, M_2, r^2, \\frac{{a}}{{b}}, \\cdot.
+- NEVER use Unicode subscripts/superscripts in formulas.
+- NEVER use Markdown code fences.
 
-IMPORTANT:
+Allowed object types:
+planet, earth, sun, star, ball, mass, particle, object, arrow,
+axis, graph, wave, circle, rectangle, box, triangle, line,
+spring, battery, resistor, molecule, atom, text, formula, equation, math
 
-- The topic is dynamic.
-- Do NOT assume Simple Harmonic Motion.
-- Do NOT use a fixed animation.
-- Select visual objects based on the actual topic.
-- Select actions based on the actual topic.
-- Use movement whenever movement helps explain the concept.
-- Use diagrams, graphs, formulas, arrows, particles,
-  processes, simulations or transformations when appropriate.
-- Use 3 to 6 scenes.
-- Every scene must teach one clear idea.
-- Avoid unrelated decorative objects.
+Allowed actions:
+appear, disappear, move, move_left, move_right, move_up, move_down,
+oscillate, rotate, draw, trace, grow, shrink, bounce, highlight, connect
 
-Possible object types:
-
-spring
-mass
-ball
-earth
-object
-arrow
-axis
-graph
-wave
-particle
-circle
-rectangle
-triangle
-line
-circuit
-battery
-resistor
-array
-tree
-leaf
-molecule
-atom
-text
-
-Possible actions:
-
-appear
-disappear
-move
-move_up
-move_down
-move_left
-move_right
-oscillate
-rotate
-draw
-transform
-grow
-shrink
-trace
-bounce
-highlight
-connect
-
-These are examples only.
-
-Choose objects and actions according to the actual topic.
-
-Return ONLY valid JSON.
-
-Format:
-
+Return ONLY valid JSON in this exact structure:
 {{
-    "title": "...",
-    "summary": "...",
-    "scenes": [
+  "title": "...",
+  "summary": "...",
+  "scenes": [
+    {{
+      "title": "...",
+      "description": "...",
+      "narration": "...",
+      "objects": [
         {{
-            "title": "...",
-            "description": "...",
-            "animation_type": "...",
-            "duration": 8,
-
-            "objects": [
-                {{
-                    "type": "...",
-                    "name": "...",
-                    "label": "..."
-                }}
-            ],
-
-            "actions": [
-                {{
-                    "target": "...",
-                    "action": "...",
-                    "duration": 4
-                }}
-            ],
-
-            "labels": [
-                "..."
-            ],
-
-            "formula": "..."
+          "type": "...",
+          "name": "...",
+          "label": "...",
+          "formula": ""
         }}
-    ]
+      ],
+      "actions": [
+        {{
+          "target": "...",
+          "action": "...",
+          "duration": 1.2
+        }}
+      ],
+      "formula": ""
+    }}
+  ]
 }}
 """
 
@@ -178,655 +262,601 @@ Format:
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are an educational animation planner. "
-                    "Return only valid JSON."
-                ),
+                "content": "Return only valid JSON for an educational Manim plan.",
             },
-            {
-                "role": "user",
-                "content": prompt,
-            },
+            {"role": "user", "content": prompt},
         ],
-        temperature=0.4,
-        max_tokens=4000,
+        temperature=0.3,
+        max_tokens=5000,
     )
 
     text = response.choices[0].message.content
-
     if not text:
-        raise RuntimeError(
-            "Groq returned an empty animation plan."
-        )
+        raise RuntimeError("Groq returned an empty animation plan.")
 
     text = text.strip()
-
-    text = re.sub(
-        r"^```(?:json)?\s*",
-        "",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"\s*```$",
-        "",
-        text,
-    )
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.I)
+    text = re.sub(r"\s*```$", "", text)
 
     try:
         plan = json.loads(text)
-
     except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            "Groq returned invalid JSON:\n" + text
-        ) from exc
+        raise RuntimeError(f"Groq returned invalid JSON:\n{text}") from exc
 
-    if not isinstance(plan, dict):
-        raise RuntimeError(
-            "Animation plan must be a JSON object."
-        )
-
-    if not isinstance(
-        plan.get("scenes"),
-        list
-    ):
-        raise RuntimeError(
-            "Animation plan does not contain scenes."
-        )
+    if not isinstance(plan, dict) or not isinstance(plan.get("scenes"), list):
+        raise RuntimeError("Invalid animation plan: scenes are missing.")
 
     if not plan["scenes"]:
-        raise RuntimeError(
-            "Groq returned zero scenes."
+        raise RuntimeError("Groq returned zero scenes.")
+
+    return _normalize_plan(plan)
+
+
+# ============================================================
+# PLAN NORMALIZATION
+# ============================================================
+
+def _normalize_plan(plan: dict) -> dict:
+    """
+    Protect Manim from bad AI output and prevent text/visual overflow.
+    """
+
+    normalized_scenes = []
+    used_scene_count = 0
+
+    for raw_scene in plan.get("scenes", [])[:5]:
+        if not isinstance(raw_scene, dict):
+            continue
+
+        scene = dict(raw_scene)
+        used_scene_count += 1
+
+        scene["title"] = _short_text(scene.get("title", "Concept"), 38)
+        scene["description"] = _short_text(scene.get("description", ""), 90)
+        scene["narration"] = _short_text(
+            scene.get("narration", scene.get("description", "")),
+            360,
         )
 
-    return plan
+        scene_formula = _latex_safe_formula(scene.get("formula", ""))
+        scene["formula"] = scene_formula
 
+        # --------------------------------------------------------
+        # OBJECTS
+        # --------------------------------------------------------
 
-# ============================================================
-# PYTHON STRING ESCAPING
-# ============================================================
+        raw_objects = scene.get("objects", [])
+        if not isinstance(raw_objects, list):
+            raw_objects = []
 
-def _py(value: str) -> str:
+        objects = []
+        used_names = set()
 
-    return (
-        str(value)
-        .replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("\n", " ")
-    )
+        for i, raw_obj in enumerate(raw_objects[:6]):
+            if not isinstance(raw_obj, dict):
+                continue
 
+            obj = dict(raw_obj)
+            obj_type = str(obj.get("type", "circle")).lower().strip()
 
-# ============================================================
-# MANIM VISUAL BUILDERS
-# ============================================================
+            name = _safe_name(obj.get("name", f"object_{i}"), f"object_{i}")
+            base_name = name
+            counter = 2
+            while name in used_names:
+                name = f"{base_name}_{counter}"
+                counter += 1
+            used_names.add(name)
 
-def _build_object_code(
-    obj: dict,
-    index: int,
-) -> str:
+            obj["type"] = obj_type
+            obj["name"] = name
+            obj["label"] = _short_text(obj.get("label", ""), 12)
 
-    obj_type = str(
-        obj.get("type", "circle")
-    ).lower()
+            if obj_type in {"formula", "equation", "math"}:
+                # Scene-level formulas are rendered once only.
+                if scene_formula:
+                    continue
+                obj["formula"] = _latex_safe_formula(
+                    obj.get("formula", obj.get("label", ""))
+                )
 
-    name = re.sub(
-        r"[^a-zA-Z0-9_]",
-        "_",
-        str(
-            obj.get(
-                "name",
-                f"object_{index}"
+            objects.append(obj)
+
+        scene["objects"] = objects
+
+        # Labels are intentionally NOT rendered separately.
+        # Object labels already provide the required explanation.
+        scene["labels"] = []
+
+        # --------------------------------------------------------
+        # ACTIONS
+        # --------------------------------------------------------
+
+        raw_actions = scene.get("actions", [])
+        if not isinstance(raw_actions, list):
+            raw_actions = []
+
+        actions = []
+        valid_names = {obj["name"] for obj in objects}
+
+        for raw_action in raw_actions[:6]:
+            if not isinstance(raw_action, dict):
+                continue
+
+            action = dict(raw_action)
+            target = _safe_name(action.get("target", ""))
+
+            if target not in valid_names:
+                continue
+
+            action_name = str(action.get("action", "appear")).lower().strip()
+            if action_name not in {
+                "appear", "disappear", "move", "move_left", "move_right",
+                "move_up", "move_down", "oscillate", "rotate", "draw",
+                "trace", "grow", "shrink", "bounce", "highlight", "connect",
+            }:
+                action_name = "highlight"
+
+            actions.append(
+                {
+                    "target": target,
+                    "action": action_name,
+                    "duration": _safe_duration(action.get("duration", 1.0)),
+                }
             )
-        )
-    )
 
-    label = _py(
-        obj.get(
-            "label",
-            name
-        )
-    )
+        scene["actions"] = actions
+        normalized_scenes.append(scene)
+
+    if not normalized_scenes:
+        raise RuntimeError("Animation plan contains no usable scenes.")
+
+    result = dict(plan)
+    result["title"] = _short_text(result.get("title", "AI Lesson"), 50)
+    result["summary"] = _short_text(result.get("summary", ""), 120)
+    result["scenes"] = normalized_scenes
+    return result
+
+
+# ============================================================
+# MANIM OBJECT BUILDERS
+# ============================================================
+
+def _build_object_code(obj: dict, index: int) -> str:
+    obj_type = str(obj.get("type", "circle")).lower().strip()
+    name = _safe_name(obj.get("name", f"object_{index}"), f"object_{index}")
+    label = str(obj.get("label", "")).strip()
+    label_literal = _py_string(_short_text(label, 12))
 
     # --------------------------------------------------------
-    # SPRING
+    # FORMULA
     # --------------------------------------------------------
-
-    if obj_type == "spring":
+    if obj_type in {"formula", "equation", "math"}:
+        formula = _latex_safe_formula(
+            obj.get("formula", obj.get("label", ""))
+        )
+        if not formula:
+            formula = r"x = y"
 
         return f"""
-        {name}_start = UP * 2.3
-        {name}_end = DOWN * 0.5
-
-        {name} = VMobject()
-
-        {name}.set_points_as_corners([
-            {name}_start,
-            {name}_start + DOWN * 0.25 + RIGHT * 0.22,
-            {name}_start + DOWN * 0.50 + LEFT * 0.22,
-            {name}_start + DOWN * 0.75 + RIGHT * 0.22,
-            {name}_start + DOWN * 1.00 + LEFT * 0.22,
-            {name}_start + DOWN * 1.25 + RIGHT * 0.22,
-            {name}_start + DOWN * 1.50 + LEFT * 0.22,
-            {name}_start + DOWN * 1.75 + RIGHT * 0.22,
-            {name}_end
-        ])
-
-        {name}_label = Text(
-            "{label}",
-            font_size=20
+        {name} = MathTex(
+            {_py_string(formula)},
+            font_size=19
         )
-
-        {name}_label.next_to(
-            {name},
-            RIGHT,
-            buff=0.25
-        )
+        if {name}.width > 4.8:
+            {name}.scale_to_fit_width(4.8)
+        if {name}.height > 0.62:
+            {name}.scale_to_fit_height(0.62)
 """
 
     # --------------------------------------------------------
-    # MASS / BALL / OBJECT
+    # TEXT
     # --------------------------------------------------------
-
-    if obj_type in {
-        "mass",
-        "ball",
-        "particle",
-        "object",
-    }:
-
+    if obj_type == "text":
         return f"""
-        {name} = Circle(
-            radius=0.42,
-            fill_opacity=1
+        {name} = Text(
+            {label_literal},
+            font_size=14
         )
-
-        {name}_label = Text(
-            "{label}",
-            font_size=20
-        )
-
-        {name}_label.next_to(
-            {name},
-            RIGHT,
-            buff=0.25
-        )
+        if {name}.width > 3.0:
+            {name}.scale_to_fit_width(3.0)
+        if {name}.height > 0.45:
+            {name}.scale_to_fit_height(0.45)
 """
 
     # --------------------------------------------------------
-    # EARTH
+    # EARTH / PLANET
     # --------------------------------------------------------
-
-    if obj_type == "earth":
-
+    if obj_type in {"earth", "planet", "world"}:
         return f"""
-        {name} = Circle(
-            radius=1.25,
+        {name}_main = Circle(
+            radius=0.62,
             fill_opacity=1
         )
-
         {name}_label = Text(
-            "{label}",
-            font_size=22
+            {label_literal},
+            font_size=11
         )
+        if {name}_label.width > 1.0:
+            {name}_label.scale_to_fit_width(1.0)
+        if {name}_label.height > 0.25:
+            {name}_label.scale_to_fit_height(0.25)
+        {name}_label.move_to({name}_main.get_center())
+        {name} = VGroup(
+            {name}_main,
+            {name}_label
+        )
+        if {name}.width > 1.65:
+            {name}.scale_to_fit_width(1.65)
+        if {name}.height > 1.65:
+            {name}.scale_to_fit_height(1.65)
+"""
 
-        {name}_label.move_to(
-            {name}.get_center()
+    # --------------------------------------------------------
+    # SUN
+    # --------------------------------------------------------
+    if obj_type == "sun":
+        return f"""
+        {name}_main = Circle(
+            radius=0.52,
+            fill_opacity=1
         )
+        {name}_rays = VGroup()
+        for angle in np.linspace(0, TAU, 8, endpoint=False):
+            {name}_rays.add(
+                Line(
+                    {name}_main.get_center() + 0.68 * np.array([np.cos(angle), np.sin(angle), 0]),
+                    {name}_main.get_center() + 0.92 * np.array([np.cos(angle), np.sin(angle), 0])
+                )
+            )
+        {name}_visual = VGroup({name}_main, {name}_rays)
+        {name}_label = Text({label_literal}, font_size=11)
+        if {name}_label.width > 1.25:
+            {name}_label.scale_to_fit_width(1.25)
+        {name}_label.next_to({name}_visual, DOWN, buff=0.07)
+        {name} = VGroup({name}_visual, {name}_label)
+        if {name}.width > 1.9:
+            {name}.scale_to_fit_width(1.9)
+        if {name}.height > 1.8:
+            {name}.scale_to_fit_height(1.8)
+"""
+
+    # --------------------------------------------------------
+    # MASS / BALL / PARTICLE / OBJECT
+    # --------------------------------------------------------
+    if obj_type in {"mass", "ball", "particle", "object", "atom"}:
+        return f"""
+        {name}_main = Circle(
+            radius=0.34,
+            fill_opacity=1
+        )
+        {name}_label = Text(
+            {label_literal},
+            font_size=10
+        )
+        if {name}_label.width > 0.52:
+            {name}_label.scale_to_fit_width(0.52)
+        if {name}_label.height > 0.22:
+            {name}_label.scale_to_fit_height(0.22)
+        {name}_label.move_to({name}_main.get_center())
+        {name} = VGroup({name}_main, {name}_label)
+        if {name}.width > 1.05:
+            {name}.scale_to_fit_width(1.05)
+        if {name}.height > 1.05:
+            {name}.scale_to_fit_height(1.05)
 """
 
     # --------------------------------------------------------
     # ARROW
     # --------------------------------------------------------
-
     if obj_type == "arrow":
-
         return f"""
-        {name} = Arrow(
-            LEFT * 1.2,
-            RIGHT * 1.2
+        {name}_main = Arrow(
+            LEFT * 0.70,
+            RIGHT * 0.70,
+            buff=0,
+            max_tip_length_to_length_ratio=0.18
         )
-
-        {name}_label = Text(
-            "{label}",
-            font_size=20
-        )
-
-        {name}_label.next_to(
-            {name},
-            UP,
-            buff=0.15
-        )
+        {name}_label = Text({label_literal}, font_size=10)
+        if {name}_label.width > 0.7:
+            {name}_label.scale_to_fit_width(0.7)
+        {name}_label.next_to({name}_main, UP, buff=0.04)
+        {name} = VGroup({name}_main, {name}_label)
+        if {name}.width > 1.75:
+            {name}.scale_to_fit_width(1.75)
+        if {name}.height > 0.65:
+            {name}.scale_to_fit_height(0.65)
 """
 
     # --------------------------------------------------------
     # AXIS
     # --------------------------------------------------------
-
     if obj_type == "axis":
-
         return f"""
-        {name} = Line(
-            LEFT * 4,
-            RIGHT * 4
-        )
-
-        {name}_label = Text(
-            "{label}",
-            font_size=20
-        )
-
-        {name}_label.next_to(
-            {name},
-            DOWN,
-            buff=0.2
-        )
+        {name}_main = Line(LEFT * 2.0, RIGHT * 2.0)
+        {name}_label = Text({label_literal}, font_size=10)
+        if {name}_label.width > 1.4:
+            {name}_label.scale_to_fit_width(1.4)
+        {name}_label.next_to({name}_main, DOWN, buff=0.05)
+        {name} = VGroup({name}_main, {name}_label)
+        if {name}.width > 4.3:
+            {name}.scale_to_fit_width(4.3)
 """
 
     # --------------------------------------------------------
-    # WAVE / GRAPH
+    # GRAPH / WAVE
     # --------------------------------------------------------
-
-    if obj_type in {
-        "wave",
-        "graph",
-    }:
-
+    if obj_type in {"graph", "wave"}:
         return f"""
         {name}_axes = Axes(
-            x_range=[-6, 6, 1],
-            y_range=[-2.5, 2.5, 1],
-            x_length=9,
-            y_length=4.5
+            x_range=[-5, 5, 1],
+            y_range=[-2, 2, 1],
+            x_length=5.8,
+            y_length=2.6
         )
-
-        {name} = {name}_axes.plot(
-            lambda x: __import__("math").sin(x),
-        )
-
-        {name}_label = Text(
-            "{label}",
-            font_size=20
-        )
-
-        {name}_label.next_to(
-            {name}_axes,
-            UP,
-            buff=0.2
-        )
+        {name}_plot = {name}_axes.plot(lambda x: np.sin(x))
+        {name}_label = Text({label_literal}, font_size=10)
+        if {name}_label.width > 2.5:
+            {name}_label.scale_to_fit_width(2.5)
+        {name}_label.next_to({name}_axes, UP, buff=0.04)
+        {name} = VGroup({name}_axes, {name}_plot, {name}_label)
+        if {name}.width > 6.2:
+            {name}.scale_to_fit_width(6.2)
+        if {name}.height > 2.9:
+            {name}.scale_to_fit_height(2.9)
 """
 
     # --------------------------------------------------------
-    # TRIANGLE
+    # SPRING
     # --------------------------------------------------------
-
-    if obj_type == "triangle":
-
+    if obj_type == "spring":
         return f"""
-        {name} = Triangle()
-
-        {name}_label = Text(
-            "{label}",
-            font_size=20
+        {name}_spring = ParametricFunction(
+            lambda t: np.array([
+                0.28 * np.sin(10 * t),
+                t,
+                0
+            ]),
+            t_range=[-1.2, 1.2]
         )
+        {name}_label = Text({label_literal}, font_size=10)
+        if {name}_label.width > 1.2:
+            {name}_label.scale_to_fit_width(1.2)
+        {name}_label.next_to({name}_spring, RIGHT, buff=0.08)
+        {name} = VGroup({name}_spring, {name}_label)
+        if {name}.height > 2.8:
+            {name}.scale_to_fit_height(2.8)
+"""
 
-        {name}_label.next_to(
-            {name},
-            DOWN,
-            buff=0.2
+    # --------------------------------------------------------
+    # BATTERY
+    # --------------------------------------------------------
+    if obj_type == "battery":
+        return f"""
+        {name}_long = Line(UP * 0.60, DOWN * 0.60).shift(LEFT * 0.16)
+        {name}_short = Line(UP * 0.35, DOWN * 0.35).shift(RIGHT * 0.16)
+        {name}_visual = VGroup({name}_long, {name}_short)
+        {name}_label = Text({label_literal}, font_size=10)
+        {name}_label.next_to({name}_visual, DOWN, buff=0.06)
+        {name} = VGroup({name}_visual, {name}_label)
+"""
+
+    # --------------------------------------------------------
+    # RESISTOR
+    # --------------------------------------------------------
+    if obj_type == "resistor":
+        return f"""
+        {name}_main = Polygon(
+            LEFT * 0.70,
+            LEFT * 0.45 + UP * 0.22,
+            LEFT * 0.15 + DOWN * 0.22,
+            RIGHT * 0.15 + UP * 0.22,
+            RIGHT * 0.45 + DOWN * 0.22,
+            RIGHT * 0.70,
+            stroke_width=2
         )
+        {name}_label = Text({label_literal}, font_size=10)
+        {name}_label.next_to({name}_main, DOWN, buff=0.05)
+        {name} = VGroup({name}_main, {name}_label)
 """
 
     # --------------------------------------------------------
     # RECTANGLE / BOX
     # --------------------------------------------------------
-
-    if obj_type in {
-        "rectangle",
-        "box",
-    }:
-
+    if obj_type in {"rectangle", "box"}:
         return f"""
-        {name} = RoundedRectangle(
-            width=2.4,
-            height=1.4
-        )
+        {name}_main = RoundedRectangle(width=1.55, height=0.85, corner_radius=0.12)
+        {name}_label = Text({label_literal}, font_size=10)
+        if {name}_label.width > 1.2:
+            {name}_label.scale_to_fit_width(1.2)
+        {name}_label.move_to({name}_main.get_center())
+        {name} = VGroup({name}_main, {name}_label)
+        if {name}.width > 2.0:
+            {name}.scale_to_fit_width(2.0)
+        if {name}.height > 1.2:
+            {name}.scale_to_fit_height(1.2)
+"""
 
-        {name}_label = Text(
-            "{label}",
-            font_size=20
-        )
-
-        {name}_label.move_to(
-            {name}.get_center()
-        )
+    # --------------------------------------------------------
+    # TRIANGLE
+    # --------------------------------------------------------
+    if obj_type == "triangle":
+        return f"""
+        {name}_main = Triangle().scale(0.45)
+        {name}_label = Text({label_literal}, font_size=10)
+        {name}_label.next_to({name}_main, DOWN, buff=0.05)
+        {name} = VGroup({name}_main, {name}_label)
 """
 
     # --------------------------------------------------------
     # LINE
     # --------------------------------------------------------
-
     if obj_type == "line":
-
         return f"""
-        {name} = Line(
-            LEFT * 3,
-            RIGHT * 3
-        )
-
-        {name}_label = Text(
-            "{label}",
-            font_size=18
-        )
-
-        {name}_label.next_to(
-            {name},
-            UP,
-            buff=0.15
-        )
+        {name}_main = Line(LEFT * 1.25, RIGHT * 1.25)
+        {name}_label = Text({label_literal}, font_size=10)
+        if {name}_label.width > 1.6:
+            {name}_label.scale_to_fit_width(1.6)
+        {name}_label.next_to({name}_main, UP, buff=0.04)
+        {name} = VGroup({name}_main, {name}_label)
+        if {name}.width > 3.0:
+            {name}.scale_to_fit_width(3.0)
 """
 
     # --------------------------------------------------------
-    # DEFAULT
+    # CIRCLE / DEFAULT
     # --------------------------------------------------------
-
     return f"""
-        {name} = Circle(
-            radius=0.45
-        )
-
-        {name}_label = Text(
-            "{label}",
-            font_size=18
-        )
-
-        {name}_label.next_to(
-            {name},
-            RIGHT,
-            buff=0.2
-        )
+        {name}_main = Circle(radius=0.45)
+        {name}_label = Text({label_literal}, font_size=10)
+        if {name}_label.width > 0.95:
+            {name}_label.scale_to_fit_width(0.95)
+        {name}_label.next_to({name}_main, DOWN, buff=0.05)
+        {name} = VGroup({name}_main, {name}_label)
+        if {name}.width > 1.45:
+            {name}.scale_to_fit_width(1.45)
+        if {name}.height > 1.45:
+            {name}.scale_to_fit_height(1.45)
 """
 
 
 # ============================================================
-# ACTION CODE
+# ACTION BUILDER
 # ============================================================
 
-def _build_action_code(
-    action: dict,
-) -> str:
-
-    target = re.sub(
-        r"[^a-zA-Z0-9_]",
-        "_",
-        str(
-            action.get(
-                "target",
-                ""
-            )
-        )
-    )
-
-    action_name = str(
-        action.get(
-            "action",
-            "appear"
-        )
-    ).lower()
-
-    try:
-        duration = float(
-            action.get(
-                "duration",
-                2
-            )
-        )
-    except (TypeError, ValueError):
-        duration = 2
-
-    duration = max(
-        0.5,
-        min(duration, 15)
-    )
-
-    # --------------------------------------------------------
-    # APPEAR
-    # --------------------------------------------------------
+def _build_action_code(action: dict) -> str:
+    target = _safe_name(action.get("target", ""))
+    action_name = str(action.get("action", "appear")).lower().strip()
+    duration = _safe_duration(action.get("duration", 1.0))
 
     if action_name == "appear":
-
         return f"""
-        if "{target}" in objects:
-            self.play(
-                FadeIn(objects["{target}"]),
-                run_time={duration}
-            )
+        if \"{target}\" in objects:
+            self.play(FadeIn(objects[\"{target}\"]), run_time={duration})
 """
-
-    # --------------------------------------------------------
-    # DISAPPEAR
-    # --------------------------------------------------------
 
     if action_name == "disappear":
-
         return f"""
-        if "{target}" in objects:
+        if \"{target}\" in objects:
+            self.play(FadeOut(objects[\"{target}\"]), run_time={duration})
+"""
+
+    movement = {
+        "move": "RIGHT * 0.45",
+        "move_right": "RIGHT * 0.45",
+        "move_left": "LEFT * 0.45",
+        "move_up": "UP * 0.40",
+        "move_down": "DOWN * 0.40",
+    }
+    if action_name in movement:
+        return f"""
+        if \"{target}\" in objects:
             self.play(
-                FadeOut(objects["{target}"]),
+                objects[\"{target}\"].animate.shift({movement[action_name]}),
                 run_time={duration}
             )
 """
-
-    # --------------------------------------------------------
-    # MOVE UP
-    # --------------------------------------------------------
-
-    if action_name == "move_up":
-
-        return f"""
-        if "{target}" in objects:
-            self.play(
-                objects["{target}"].animate.shift(UP * 2),
-                run_time={duration}
-            )
-"""
-
-    # --------------------------------------------------------
-    # MOVE DOWN
-    # --------------------------------------------------------
-
-    if action_name == "move_down":
-
-        return f"""
-        if "{target}" in objects:
-            self.play(
-                objects["{target}"].animate.shift(DOWN * 2),
-                run_time={duration}
-            )
-"""
-
-    # --------------------------------------------------------
-    # MOVE LEFT
-    # --------------------------------------------------------
-
-    if action_name == "move_left":
-
-        return f"""
-        if "{target}" in objects:
-            self.play(
-                objects["{target}"].animate.shift(LEFT * 2),
-                run_time={duration}
-            )
-"""
-
-    # --------------------------------------------------------
-    # MOVE RIGHT
-    # --------------------------------------------------------
-
-    if action_name == "move_right":
-
-        return f"""
-        if "{target}" in objects:
-            self.play(
-                objects["{target}"].animate.shift(RIGHT * 2),
-                run_time={duration}
-            )
-"""
-
-    # --------------------------------------------------------
-    # OSCILLATE
-    # --------------------------------------------------------
 
     if action_name == "oscillate":
-
+        q = duration / 4
         return f"""
-        if "{target}" in objects:
-
-            self.play(
-                objects["{target}"].animate.shift(
-                    DOWN * 1.5
-                ),
-                run_time={duration / 4}
-            )
-
-            self.play(
-                objects["{target}"].animate.shift(
-                    UP * 3
-                ),
-                run_time={duration / 2}
-            )
-
-            self.play(
-                objects["{target}"].animate.shift(
-                    DOWN * 1.5
-                ),
-                run_time={duration / 4}
-            )
+        if \"{target}\" in objects:
+            self.play(objects[\"{target}\"].animate.shift(DOWN * 0.28), run_time={q})
+            self.play(objects[\"{target}\"].animate.shift(UP * 0.56), run_time={q * 2})
+            self.play(objects[\"{target}\"].animate.shift(DOWN * 0.28), run_time={q})
 """
-
-    # --------------------------------------------------------
-    # ROTATE
-    # --------------------------------------------------------
 
     if action_name == "rotate":
-
         return f"""
-        if "{target}" in objects:
-            self.play(
-                Rotate(
-                    objects["{target}"],
-                    angle=TAU
-                ),
-                run_time={duration}
-            )
+        if \"{target}\" in objects:
+            self.play(Rotate(objects[\"{target}\"], angle=PI), run_time={duration})
 """
-
-    # --------------------------------------------------------
-    # GROW
-    # --------------------------------------------------------
 
     if action_name == "grow":
-
         return f"""
-        if "{target}" in objects:
-            self.play(
-                objects["{target}"].animate.scale(1.4),
-                run_time={duration}
-            )
+        if \"{target}\" in objects:
+            self.play(objects[\"{target}\"].animate.scale(1.06), run_time={duration})
 """
-
-    # --------------------------------------------------------
-    # SHRINK
-    # --------------------------------------------------------
 
     if action_name == "shrink":
-
         return f"""
-        if "{target}" in objects:
-            self.play(
-                objects["{target}"].animate.scale(0.7),
-                run_time={duration}
-            )
+        if \"{target}\" in objects:
+            self.play(objects[\"{target}\"].animate.scale(0.94), run_time={duration})
 """
 
-    # --------------------------------------------------------
-    # DRAW / TRACE
-    # --------------------------------------------------------
-
-    if action_name in {
-        "draw",
-        "trace",
-    }:
-
+    if action_name in {"draw", "trace"}:
         return f"""
-        if "{target}" in objects:
-            self.play(
-                Create(objects["{target}"]),
-                run_time={duration}
-            )
+        if \"{target}\" in objects:
+            self.play(Create(objects[\"{target}\"]), run_time={duration})
 """
-
-    # --------------------------------------------------------
-    # HIGHLIGHT
-    # --------------------------------------------------------
-
-    if action_name == "highlight":
-
-        return f"""
-        if "{target}" in objects:
-
-            self.play(
-                Indicate(
-                    objects["{target}"]
-                ),
-                run_time={duration}
-            )
-"""
-
-    # --------------------------------------------------------
-    # BOUNCE
-    # --------------------------------------------------------
 
     if action_name == "bounce":
-
+        half = duration / 2
         return f"""
-        if "{target}" in objects:
-
-            self.play(
-                objects["{target}"].animate.shift(
-                    UP * 1.5
-                ),
-                run_time={duration / 2}
-            )
-
-            self.play(
-                objects["{target}"].animate.shift(
-                    DOWN * 1.5
-                ),
-                run_time={duration / 2}
-            )
+        if \"{target}\" in objects:
+            self.play(objects[\"{target}\"].animate.shift(UP * 0.30), run_time={half})
+            self.play(objects[\"{target}\"].animate.shift(DOWN * 0.30), run_time={half})
 """
 
-    # --------------------------------------------------------
-    # CONNECT
-    # --------------------------------------------------------
-
-    if action_name == "connect":
-
-        return """
-        self.wait(1)
+    # highlight / connect / unknown
+    return f"""
+        if \"{target}\" in objects:
+            self.play(Indicate(objects[\"{target}\"], scale_factor=1.03), run_time={duration})
 """
 
-    # --------------------------------------------------------
-    # DEFAULT
-    # --------------------------------------------------------
+
+# ============================================================
+# LAYOUT
+# ============================================================
+
+def _build_layout_code(object_count: int, has_formula: bool) -> str:
+    """
+    Fixed safe zones:
+
+        top    = title + description
+        middle = teaching visuals
+        bottom = formula
+
+    This prevents text from sitting on top of diagrams.
+    """
+
+    center_y = 0.05 if has_formula else -0.05
+    max_height = 2.35 if has_formula else 2.75
+
+    if object_count <= 1:
+        arrangement = f"""
+            group.move_to(UP * {center_y})
+"""
+    elif object_count == 2:
+        arrangement = f"""
+            group.arrange(RIGHT, buff=0.85, aligned_edge=DOWN)
+            group.move_to(UP * {center_y})
+"""
+    elif object_count <= 4:
+        arrangement = f"""
+            group.arrange_in_grid(rows=2, cols=2, buff=(0.65, 0.45))
+            group.move_to(UP * {center_y})
+"""
+    else:
+        arrangement = f"""
+            group.arrange_in_grid(rows=2, cols=3, buff=(0.55, 0.38))
+            group.move_to(UP * {center_y})
+"""
 
     return f"""
-        if "{target}" in objects:
-            self.play(
-                Indicate(objects["{target}"]),
-                run_time={duration}
-            )
+        if visual_objects:
+            group = VGroup(*visual_objects)
+{arrangement}
+
+            if group.width > 7.1:
+                group.scale_to_fit_width(7.1)
+
+            if group.height > {max_height}:
+                group.scale_to_fit_height({max_height})
+
+            if group.width > 7.1:
+                group.scale_to_fit_width(7.1)
+
+            group.move_to(UP * {center_y})
 """
 
 
@@ -839,261 +869,191 @@ def create_manim_script(
     subject: str,
     topic: str,
 ) -> Path:
-
-    safe_subject = _py(subject)
-
-    safe_topic = _py(topic)
+    plan = _normalize_plan(plan)
 
     scene_code = []
 
-    for scene_index, scene in enumerate(
-        plan["scenes"]
-    ):
-
-        title = _py(
-            scene.get(
-                "title",
-                f"Scene {scene_index + 1}"
-            )
-        )
-
-        description = _py(
-            scene.get(
-                "description",
-                ""
-            )
-        )
-
-        formula = scene.get(
-            "formula"
-        )
-
-        objects = scene.get(
-            "objects",
-            []
-        )
-
-        actions = scene.get(
-            "actions",
-            []
-        )
+    for scene_index, scene in enumerate(plan["scenes"]):
+        title = _short_text(scene.get("title", f"Scene {scene_index + 1}"), 38)
+        description = _short_text(scene.get("description", ""), 90)
+        objects = scene.get("objects", [])
+        actions = scene.get("actions", [])
+        formula = _latex_safe_formula(scene.get("formula", ""))
 
         object_code = []
+        registration = []
+        for i, obj in enumerate(objects):
+            object_code.append(_build_object_code(obj, i))
+            name = _safe_name(obj.get("name", f"object_{i}"))
+            registration.append(f'        objects[{_py_string(name)}] = {name}')
 
-        for object_index, obj in enumerate(
-            objects
-        ):
-
-            object_code.append(
-                _build_object_code(
-                    obj,
-                    object_index
-                )
-            )
-
-        action_code = []
-
-        for action in actions:
-
-            action_code.append(
-                _build_action_code(
-                    action
-                )
-            )
+        action_code = [_build_action_code(action) for action in actions]
 
         formula_code = ""
-
         if formula:
-
-            safe_formula = _py(
-                formula
-            )
-
             formula_code = f"""
-        formula = Text(
-            "{safe_formula}",
-            font_size=28
+        scene_formula = MathTex(
+            {_py_string(formula)},
+            font_size=18
         )
 
-        formula.to_edge(
-            DOWN
-        )
+        if scene_formula.width > 5.0:
+            scene_formula.scale_to_fit_width(5.0)
+        if scene_formula.height > 0.60:
+            scene_formula.scale_to_fit_height(0.60)
+
+        scene_formula.to_edge(DOWN, buff=0.28)
 
         self.play(
-            Write(formula)
+            Write(scene_formula),
+            run_time=0.65
         )
-
-        self.wait(1)
 """
+        else:
+            formula_code = "        scene_formula = None\n"
 
         scene_block = f"""
-
         # ==================================================
-        # AI GENERATED SCENE {scene_index + 1}
+        # SCENE {scene_index + 1}
         # ==================================================
 
         scene_title = Text(
-            "{title}",
-            font_size=30
+            {_py_string(title)},
+            font_size=20
         )
+        if scene_title.width > 6.7:
+            scene_title.scale_to_fit_width(6.7)
+        if scene_title.height > 0.42:
+            scene_title.scale_to_fit_height(0.42)
+        scene_title.to_edge(UP, buff=0.22)
 
         scene_description = Text(
-            "{description}",
-            font_size=17
+            {_py_string(description)},
+            font_size=10
         )
-
-        scene_description.scale_to_fit_width(
-            11
-        )
-
-        scene_title.to_edge(
-            UP
-        )
-
-        scene_description.next_to(
-            scene_title,
-            DOWN,
-            buff=0.2
-        )
+        if scene_description.width > 6.7:
+            scene_description.scale_to_fit_width(6.7)
+        if scene_description.height > 0.32:
+            scene_description.scale_to_fit_height(0.32)
+        scene_description.next_to(scene_title, DOWN, buff=0.06)
 
         self.play(
             Write(scene_title),
-            FadeIn(scene_description)
+            FadeIn(scene_description),
+            run_time=0.50
         )
 
         objects = {{}}
 
 {''.join(object_code)}
+{chr(10).join(registration)}
 
-"""
+        visual_objects = list(objects.values())
 
-        # Register all generated objects.
-        for obj in objects:
+{_build_layout_code(len(objects), bool(formula))}
 
-            name = re.sub(
-                r"[^a-zA-Z0-9_]",
-                "_",
-                str(
-                    obj.get(
-                        "name",
-                        ""
-                    )
-                )
-            )
-
-            if name:
-
-                scene_block += f"""
-        objects["{name}"] = {name}
-"""
-
-        scene_block += f"""
-
-        # Arrange scene objects.
-        visual_objects = [
-            value
-            for key, value in objects.items()
-        ]
+        # ----------------------------------------------
+        # SHOW OBJECTS
+        # ----------------------------------------------
 
         if visual_objects:
-
-            group = VGroup(
-                *visual_objects
-            )
-
-            group.scale_to_fit_width(
-                10
-            )
-
-            group.move_to(
-                ORIGIN
-            )
-
             self.play(
-                FadeIn(group)
+                *[FadeIn(item) for item in visual_objects],
+                run_time=0.55
             )
 
 {''.join(action_code)}
 
 {formula_code}
 
-        self.wait(1)
+        # ----------------------------------------------
+        # FINAL OVERFLOW CHECK
+        # ----------------------------------------------
+
+        if visual_objects:
+            visible_group = VGroup(*visual_objects)
+            max_h = {2.35 if formula else 2.75}
+
+            if visible_group.width > 7.1:
+                visible_group.scale_to_fit_width(7.1)
+
+            if visible_group.height > max_h:
+                visible_group.scale_to_fit_height(max_h)
+
+            if visible_group.width > 7.1:
+                visible_group.scale_to_fit_width(7.1)
+
+        self.wait(0.35)
+
+        # ----------------------------------------------
+        # CLEAN SCENE
+        # ----------------------------------------------
+
+        fade_items = [scene_title, scene_description]
+        if scene_formula is not None:
+            fade_items.append(scene_formula)
+        fade_items.extend(visual_objects)
 
         self.play(
-            FadeOut(
-                scene_title,
-                scene_description,
-                *[
-                    value
-                    for value in objects.values()
-                ]
-            )
+            FadeOut(*fade_items),
+            run_time=0.40
         )
 """
 
-        scene_code.append(
-            scene_block
-        )
+        scene_code.append(scene_block)
 
-    script = f'''
-from manim import *
+    script = f'''from manim import *
+import numpy as np
 
 
 class AIAnimatedLesson(Scene):
 
     def construct(self):
 
+        # ==================================================
+        # INTRO
+        # ==================================================
+
         subject = Text(
-            "{safe_subject}",
-            font_size=28
+            {_py_string(_short_text(subject, 30))},
+            font_size=17
         )
+        if subject.width > 5.2:
+            subject.scale_to_fit_width(5.2)
 
         topic = Text(
-            "{safe_topic}",
-            font_size=42
+            {_py_string(_short_text(topic, 42))},
+            font_size=23
         )
+        if topic.width > 6.8:
+            topic.scale_to_fit_width(6.8)
+        if topic.height > 0.48:
+            topic.scale_to_fit_height(0.48)
 
-        header = VGroup(
-            subject,
-            topic
-        ).arrange(
-            DOWN,
-            buff=0.25
-        )
+        intro = VGroup(subject, topic).arrange(DOWN, buff=0.10)
+        if intro.width > 7.0:
+            intro.scale_to_fit_width(7.0)
+        if intro.height > 1.0:
+            intro.scale_to_fit_height(1.0)
 
         self.play(
             Write(subject),
-            Write(topic)
+            Write(topic),
+            run_time=0.60
         )
+        self.wait(0.20)
+        self.play(FadeOut(intro), run_time=0.35)
 
-        self.wait(1)
-
-        self.play(
-            FadeOut(header)
-        )
-
-{"".join(scene_code)}
+{''.join(scene_code)}
 '''
 
-    filename = (
-        f"animation_{uuid.uuid4().hex}.py"
-    )
-
-    script_path = (
-        ANIMATION_DIR
-        / filename
-    )
-
-    script_path.write_text(
-        script,
-        encoding="utf-8"
-    )
-
-    return script_path
+    path = ANIMATION_DIR / f"animation_{uuid.uuid4().hex}.py"
+    path.write_text(script, encoding="utf-8")
+    return path
 
 
 # ============================================================
-# RENDER ANIMATION
+# MANIM RENDER
 # ============================================================
 
 def render_animation(
@@ -1101,77 +1061,758 @@ def render_animation(
     subject: str,
     topic: str,
 ) -> str:
+    print("\n========== ANIMATION GENERATION ==========")
+    print("Running Manim...")
 
-    script_path = create_manim_script(
-        plan=plan,
-        subject=subject,
-        topic=topic,
-    )
-
-    render_dir = (
-        ANIMATION_DIR
-        / "manim_media"
-    )
-
-    render_dir.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    script_path = create_manim_script(plan, subject, topic)
 
     command = [
         "manim",
-        "-ql",
+        "-qm",
         "--media_dir",
-        str(render_dir),
+        str(MANIM_MEDIA_DIR),
         str(script_path),
         "AIAnimatedLesson",
     ]
 
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "Manim was not found. Activate the virtual environment and install Manim."
+        ) from exc
 
     if result.returncode != 0:
-
+        combined = (result.stderr or "") + "\n" + (result.stdout or "")
         raise RuntimeError(
-            "Manim rendering failed:\n\n"
-            + result.stderr[-10000:]
+            "Manim rendering failed:\n\n" + combined[-16000:]
         )
 
-    candidates = list(
-        render_dir.rglob(
-            "AIAnimatedLesson.mp4"
-        )
-    )
-
+    candidates = list(MANIM_MEDIA_DIR.rglob("AIAnimatedLesson.mp4"))
     if not candidates:
-
         raise FileNotFoundError(
-            "Manim completed but no MP4 was found."
+            "Manim completed but AIAnimatedLesson.mp4 was not found."
         )
 
-    source_video = candidates[-1]
+    source_video = max(candidates, key=lambda p: p.stat().st_mtime)
+    final_video = MEDIA_DIR / f"ai_animation_{uuid.uuid4().hex}.mp4"
+    shutil.copy2(source_video, final_video)
 
-    final_name = (
-        f"ai_animation_{uuid.uuid4().hex}.mp4"
-    )
-
-    final_video = (
-        MEDIA_DIR
-        / final_name
-    )
-
-    source_video.replace(
-        final_video
-    )
-
+    print("Animation generated:", final_video)
     return str(final_video)
 
 
 # ============================================================
-# COMPLETE AI ANIMATION PIPELINE
+# AUDIO
+# ============================================================
+
+def _scene_narrations(plan: dict) -> list[str]:
+    """
+    Extract narration separately for every scene.
+
+    Each scene gets its own TTS request so that one failed or
+    shortened TTS response cannot affect the other scenes.
+    """
+
+    narrations = []
+
+    for scene_index, scene in enumerate(
+        plan.get("scenes", []),
+        start=1
+    ):
+
+        if not isinstance(scene, dict):
+            continue
+
+        narration = str(
+            scene.get("narration", "")
+        ).strip()
+
+        narration = re.sub(
+            r"\s+",
+            " ",
+            narration
+        ).strip()
+
+        if narration:
+            narrations.append(narration)
+
+        else:
+            print(
+                f"WARNING: Scene {scene_index} has no narration."
+            )
+
+    return narrations
+
+
+def _get_audio_duration(
+    audio_file: str | Path,
+) -> float:
+    """
+    Get audio duration using ffprobe.
+    """
+
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(audio_file),
+    ]
+
+    try:
+
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        return float(
+            result.stdout.strip()
+        )
+
+    except Exception as exc:
+
+        print(
+            f"WARNING: Could not determine audio duration: {exc}"
+        )
+
+        return 0.0
+
+
+def generate_scene_audio(
+    plan: dict,
+) -> list[str]:
+    """
+    Generate one WAV file for every scene narration.
+
+    We intentionally generate each scene separately.
+    """
+
+    if generate_speech is None:
+
+        print(
+            "WARNING: TTS service is unavailable."
+        )
+
+        return []
+
+    narrations = _scene_narrations(
+        plan
+    )
+
+    if not narrations:
+
+        print(
+            "WARNING: No narration available."
+        )
+
+        return []
+
+    audio_files = []
+
+    print(
+        "\n========== SCENE AUDIO GENERATION =========="
+    )
+
+    for index, narration in enumerate(
+        narrations,
+        start=1
+    ):
+
+        print(
+            f"\n----- Scene {index} -----"
+        )
+
+        print(
+            "Narration:",
+            narration
+        )
+
+        try:
+
+            try:
+
+                audio_file = generate_speech(
+                    text=narration,
+                    voice="Kore",
+                )
+
+            except TypeError:
+
+                audio_file = generate_speech(
+                    narration
+                )
+
+        except Exception as exc:
+
+            raise RuntimeError(
+                f"TTS generation failed for scene {index}: {exc}"
+            ) from exc
+
+        if not audio_file:
+
+            raise RuntimeError(
+                f"TTS returned no audio for scene {index}."
+            )
+
+        audio_path = Path(
+            str(audio_file)
+        )
+
+        if not audio_path.exists():
+
+            raise RuntimeError(
+                f"TTS audio file does not exist for scene {index}: "
+                f"{audio_path}"
+            )
+
+        if audio_path.stat().st_size == 0:
+
+            raise RuntimeError(
+                f"TTS audio file is empty for scene {index}."
+            )
+
+        duration = _get_audio_duration(
+            audio_path
+        )
+
+        print(
+            f"Scene {index} audio:"
+        )
+
+        print(
+            audio_path
+        )
+
+        print(
+            f"Scene {index} duration: "
+            f"{duration:.2f} seconds"
+        )
+
+        audio_files.append(
+            str(audio_path)
+        )
+
+    print(
+        "\nGenerated",
+        len(audio_files),
+        "scene audio files."
+    )
+
+    return audio_files
+
+
+# ============================================================
+# AUDIO CONCATENATION
+# ============================================================
+
+def combine_scene_audio(
+    audio_files: list[str],
+) -> str | None:
+    """
+    Combine scene WAV files into one continuous WAV file.
+
+    FFmpeg is used to normalize every input to:
+        24 kHz
+        mono
+        PCM 16-bit
+
+    This avoids format mismatches between separate TTS outputs.
+    """
+
+    if not audio_files:
+        return None
+
+    valid_files = []
+
+    for audio_file in audio_files:
+
+        path = Path(
+            audio_file
+        )
+
+        if not path.exists():
+
+            raise FileNotFoundError(
+                f"Scene audio does not exist: {path}"
+            )
+
+        if path.stat().st_size == 0:
+
+            raise RuntimeError(
+                f"Scene audio is empty: {path}"
+            )
+
+        valid_files.append(
+            path
+        )
+
+    if not valid_files:
+        return None
+
+    concat_file = (
+        MEDIA_DIR
+        / f"audio_concat_{uuid.uuid4().hex}.txt"
+    )
+
+    combined_audio = (
+        MEDIA_DIR
+        / f"narration_{uuid.uuid4().hex}.wav"
+    )
+
+    # --------------------------------------------------------
+    # Create concat list
+    # --------------------------------------------------------
+
+    lines = []
+
+    for path in valid_files:
+
+        escaped = str(path).replace(
+            "'",
+            "'\\''"
+        )
+
+        lines.append(
+            f"file '{escaped}'"
+        )
+
+    concat_file.write_text(
+        "\n".join(lines),
+        encoding="utf-8"
+    )
+
+    print(
+        "\n========== COMBINING SCENE AUDIO =========="
+    )
+
+    command = [
+        "ffmpeg",
+        "-y",
+
+        "-f",
+        "concat",
+
+        "-safe",
+        "0",
+
+        "-i",
+        str(concat_file),
+
+        "-ar",
+        "24000",
+
+        "-ac",
+        "1",
+
+        "-c:a",
+        "pcm_s16le",
+
+        str(combined_audio),
+    ]
+
+    try:
+
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+        )
+
+    except FileNotFoundError as exc:
+
+        raise RuntimeError(
+            "FFmpeg was not found. "
+            "Install FFmpeg and make sure "
+            "'ffmpeg' is available in PATH."
+        ) from exc
+
+    finally:
+
+        if concat_file.exists():
+
+            try:
+                concat_file.unlink()
+
+            except OSError:
+                pass
+
+    if result.returncode != 0:
+
+        raise RuntimeError(
+            "FFmpeg audio concatenation failed:\n\n"
+            + (
+                result.stderr
+                or result.stdout
+                or "Unknown FFmpeg error."
+            )[-12000:]
+        )
+
+    if not combined_audio.exists():
+
+        raise RuntimeError(
+            "FFmpeg did not create combined narration."
+        )
+
+    if combined_audio.stat().st_size == 0:
+
+        raise RuntimeError(
+            "Combined narration is empty."
+        )
+
+    duration = _get_audio_duration(
+        combined_audio
+    )
+
+    print(
+        "Combined narration:",
+        combined_audio
+    )
+
+    print(
+        f"Combined narration duration: "
+        f"{duration:.2f} seconds"
+    )
+
+    return str(
+        combined_audio
+    )
+
+
+def generate_narration_audio(
+    plan: dict,
+) -> str | None:
+    """
+    Complete TTS pipeline:
+
+        Scene 1 → TTS
+        Scene 2 → TTS
+        Scene 3 → TTS
+        Scene 4 → TTS
+                  ↓
+             concatenate
+                  ↓
+          continuous WAV
+    """
+
+    scene_audio = generate_scene_audio(
+        plan
+    )
+
+    if not scene_audio:
+
+        return None
+
+    return combine_scene_audio(
+        scene_audio
+    )
+
+
+# ============================================================
+# MEDIA DURATION
+# ============================================================
+
+def _get_media_duration(
+    file_path: str | Path,
+) -> float:
+    """
+    Return media duration in seconds using ffprobe.
+    """
+
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+
+        "-show_entries",
+        "format=duration",
+
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+
+        str(file_path),
+    ]
+
+    try:
+
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        return float(
+            result.stdout.strip()
+        )
+
+    except Exception as exc:
+
+        print(
+            f"WARNING: Could not determine media duration: {exc}"
+        )
+
+        return 0.0
+
+
+# ============================================================
+# AUDIO / VIDEO MERGE
+# ============================================================
+
+def merge_audio_video(
+    video_file: str,
+    audio_file: str,
+) -> str:
+    """
+    Merge Manim animation with the generated narration.
+
+    The narration is used exactly once.
+    If narration is shorter than the animation, the remaining
+    animation is kept, but no narration is repeated.
+
+    This function does NOT use:
+        - apad
+        - stream_loop
+        - shortest
+
+    because repeating the complete narration would make the
+    educational explanation repeat incorrectly.
+    """
+
+    video = Path(video_file)
+    audio = Path(audio_file)
+
+    if not video.exists():
+        raise FileNotFoundError(
+            f"Video not found: {video}"
+        )
+
+    if not audio.exists():
+        raise FileNotFoundError(
+            f"Audio not found: {audio}"
+        )
+
+    video_duration = _get_media_duration(video)
+    audio_duration = _get_media_duration(audio)
+
+    print("\n========== AUDIO / VIDEO CHECK ==========")
+    print(f"Video duration: {video_duration:.2f}s")
+    print(f"Audio duration: {audio_duration:.2f}s")
+
+    if video_duration <= 0:
+        raise RuntimeError(
+            "Could not determine video duration."
+        )
+
+    if audio_duration <= 0:
+        raise RuntimeError(
+            "Generated narration has zero duration."
+        )
+
+    # --------------------------------------------------------
+    # IMPORTANT CHECK
+    # --------------------------------------------------------
+
+    if audio_duration < video_duration:
+        print(
+            "\nWARNING: Narration is shorter than animation."
+        )
+
+        print(
+            f"Missing narration coverage: "
+            f"{video_duration - audio_duration:.2f}s"
+        )
+
+        print(
+            "The narration will NOT be repeated."
+        )
+
+    elif audio_duration > video_duration:
+        print(
+            "\nNarration is longer than animation."
+        )
+
+        print(
+            "Narration will be trimmed to the animation duration."
+        )
+
+    else:
+        print(
+            "\nNarration and animation durations match."
+        )
+
+    final_video = (
+        MEDIA_DIR
+        / f"ai_animation_final_{uuid.uuid4().hex}.mp4"
+    )
+
+    # --------------------------------------------------------
+    # FFMPEG
+    # --------------------------------------------------------
+
+    command = [
+        "ffmpeg",
+        "-y",
+
+        # ----------------------------------------------------
+        # VIDEO INPUT
+        # ----------------------------------------------------
+
+        "-i",
+        str(video),
+
+        # ----------------------------------------------------
+        # AUDIO INPUT
+        # ----------------------------------------------------
+
+        "-i",
+        str(audio),
+
+        # ----------------------------------------------------
+        # VIDEO STREAM
+        # ----------------------------------------------------
+
+        "-map",
+        "0:v:0",
+
+        # ----------------------------------------------------
+        # AUDIO STREAM
+        # ----------------------------------------------------
+
+        "-map",
+        "1:a:0",
+
+        # ----------------------------------------------------
+        # VIDEO ENCODING
+        # ----------------------------------------------------
+
+        "-c:v",
+        "libx264",
+
+        "-preset",
+        "veryfast",
+
+        "-pix_fmt",
+        "yuv420p",
+
+        # ----------------------------------------------------
+        # AUDIO ENCODING
+        # ----------------------------------------------------
+
+        "-c:a",
+        "aac",
+
+        "-b:a",
+        "128k",
+
+        # ----------------------------------------------------
+        # KEEP COMPLETE VIDEO
+        # ----------------------------------------------------
+
+        "-t",
+        f"{video_duration:.3f}",
+
+        # ----------------------------------------------------
+        # MP4 COMPATIBILITY
+        # ----------------------------------------------------
+
+        "-movflags",
+        "+faststart",
+
+        str(final_video),
+    ]
+
+    print(
+        "\n========== MERGING AUDIO + VIDEO =========="
+    )
+
+    print(
+        "Running FFmpeg..."
+    )
+
+    try:
+
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+        )
+
+    except FileNotFoundError as exc:
+
+        raise RuntimeError(
+            "FFmpeg was not found. "
+            "Install FFmpeg and make sure "
+            "'ffmpeg' is available in PATH."
+        ) from exc
+
+    if result.returncode != 0:
+
+        raise RuntimeError(
+            "FFmpeg audio/video merge failed:\n\n"
+            + (
+                result.stderr
+                or result.stdout
+                or "Unknown FFmpeg error."
+            )[-12000:]
+        )
+
+    # --------------------------------------------------------
+    # VALIDATE OUTPUT
+    # --------------------------------------------------------
+
+    if not final_video.exists():
+
+        raise RuntimeError(
+            "FFmpeg did not create the final video."
+        )
+
+    if final_video.stat().st_size == 0:
+
+        raise RuntimeError(
+            "Final video is empty."
+        )
+
+    final_duration = _get_media_duration(
+        final_video
+    )
+
+    final_audio_duration = _get_media_duration(
+        final_video
+    )
+
+    print(
+        "\n========== FINAL VIDEO =========="
+    )
+
+    print(
+        "Final video:",
+        final_video
+    )
+
+    print(
+        f"Final duration: {final_duration:.2f}s"
+    )
+
+    print(
+        f"Original narration: {audio_duration:.2f}s"
+    )
+
+    return str(
+        final_video
+    )
+# ============================================================
+# COMPLETE ANIMATION PIPELINE
 # ============================================================
 
 def generate_ai_animation(
@@ -1180,6 +1821,30 @@ def generate_ai_animation(
     grade: str,
     concept: str,
 ) -> tuple[str, dict]:
+    """
+    Complete AI animation pipeline:
+
+        1. Generate AI lesson plan
+        2. Normalize the plan
+        3. Generate Manim animation
+        4. Generate scene-by-scene TTS
+        5. Combine narration
+        6. Merge narration with animation
+
+    Returns:
+        (final_video_path, animation_plan)
+    """
+
+    print("\n")
+    print("=" * 60)
+    print("       AI ANIMATION GENERATION")
+    print("=" * 60)
+
+    # --------------------------------------------------------
+    # STEP 1 — GENERATE AI PLAN
+    # --------------------------------------------------------
+
+    print("\n[1/4] Generating animation plan...")
 
     plan = generate_animation_plan(
         subject=subject,
@@ -1188,13 +1853,163 @@ def generate_ai_animation(
         concept=concept,
     )
 
+    if not plan:
+        raise RuntimeError(
+            "AI failed to generate an animation plan."
+        )
+
+    if not isinstance(plan.get("scenes"), list):
+        raise RuntimeError(
+            "Animation plan does not contain scenes."
+        )
+
+    if not plan["scenes"]:
+        raise RuntimeError(
+            "Animation plan contains zero scenes."
+        )
+
+    print(
+        f"Animation plan generated with "
+        f"{len(plan['scenes'])} scenes."
+    )
+
+    # --------------------------------------------------------
+    # STEP 2 — RENDER MANIM
+    # --------------------------------------------------------
+
+    print("\n[2/4] Rendering Manim animation...")
+
     video_file = render_animation(
         plan=plan,
         subject=subject,
         topic=topic,
     )
 
-    return (
-        video_file,
-        plan,
+    if not video_file:
+        raise RuntimeError(
+            "Manim did not return a video file."
+        )
+
+    if not Path(video_file).exists():
+        raise RuntimeError(
+            f"Rendered video does not exist: {video_file}"
+        )
+
+    print(
+        "Animation rendered successfully:"
+    )
+
+    print(
+        video_file
+    )
+
+    # --------------------------------------------------------
+    # STEP 3 — GENERATE NARRATION
+    # --------------------------------------------------------
+
+    print("\n[3/4] Generating narration audio...")
+
+    audio_file = generate_narration_audio(
+        plan
+    )
+
+    if not audio_file:
+
+        print(
+            "WARNING: Narration could not be generated."
+        )
+
+        print(
+            "Returning Manim video without narration."
+        )
+
+        return video_file, plan
+
+    if not Path(audio_file).exists():
+
+        print(
+            "WARNING: Generated narration file "
+            "does not exist."
+        )
+
+        return video_file, plan
+
+    print(
+        "Narration generated successfully:"
+    )
+
+    print(
+        audio_file
+    )
+
+    # --------------------------------------------------------
+    # STEP 4 — MERGE AUDIO + VIDEO
+    # --------------------------------------------------------
+
+    print("\n[4/4] Merging animation and narration...")
+
+    try:
+
+        final_video = merge_audio_video(
+            video_file=video_file,
+            audio_file=audio_file,
+        )
+
+    except Exception as exc:
+
+        raise RuntimeError(
+            "Failed to merge animation and narration:\n"
+            f"{exc}"
+        ) from exc
+
+    if not final_video:
+        raise RuntimeError(
+            "Audio/video merge returned no video."
+        )
+
+    if not Path(final_video).exists():
+        raise RuntimeError(
+            f"Final video does not exist: {final_video}"
+        )
+
+    # --------------------------------------------------------
+    # COMPLETE
+    # --------------------------------------------------------
+
+    print("\n")
+    print("=" * 60)
+    print("       ANIMATION GENERATION COMPLETE")
+    print("=" * 60)
+
+    print(
+        "\nFINAL VIDEO:"
+    )
+
+    print(
+        final_video
+    )
+
+    print(
+        "\nSCENES:"
+    )
+
+    print(
+        len(plan["scenes"])
+    )
+
+    print(
+        "=" * 60
+    )
+
+    return final_video, plan
+
+
+# ============================================================
+# MODULE TEST
+# ============================================================
+
+if __name__ == "__main__":
+
+    print(
+        "animation_service.py loaded successfully."
     )
