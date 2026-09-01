@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 
+
 class ProgressRequest(BaseModel):
     student_id: str
     subject: str
@@ -20,3 +21,4 @@ class ProgressResponse(BaseModel):
     status: str
     strengths: Optional[str] = None
     weaknesses: Optional[str] = None
+    last_assessed_at: Optional[str] = None
