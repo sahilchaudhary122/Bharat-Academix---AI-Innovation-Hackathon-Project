@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 class AssessmentRequest(BaseModel):
@@ -10,7 +10,11 @@ class AssessmentRequest(BaseModel):
     student_answer: Optional[str] = None
     correct_answer: Optional[str] = None
     is_correct: Optional[bool] = None
-    score: Optional[float] = None
+    score: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100,
+    )
     feedback: Optional[str] = None
     misconception: Optional[str] = None
 

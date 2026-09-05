@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from models.assessment import AssessmentRequest, AssessmentResponse
 from database.supabase_client import supabase
+from api.dependencies import get_current_student
 
 
 router = APIRouter(
@@ -15,11 +16,9 @@ router = APIRouter(
 def calculate_mastery(assessments: list) -> float:
     """
     Calculate mastery from all available assessment scores.
-
-    Each assessment contributes equally to the student's
-    current mastery for the topic.
+    Scores are stored on a 0-100 scale.
+    Each assessment contributes equally.
     """
-
     scores = []
 
     for assessment in assessments:
@@ -28,7 +27,7 @@ def calculate_mastery(assessments: list) -> float:
         if score is not None:
             try:
                 score = float(score)
-                score = max(0.0, min(1.0, score))
+                score = max(0.0, min(100.0, score))
                 scores.append(score)
             except (TypeError, ValueError):
                 continue
@@ -44,13 +43,13 @@ def determine_status(mastery: float) -> str:
     Convert mastery score into an understandable learning status.
     """
 
-    if mastery >= 0.85:
+    if mastery >= 85:
         return "mastered"
 
-    if mastery >= 0.70:
+    if mastery >= 70:
         return "proficient"
 
-    if mastery >= 0.40:
+    if mastery >= 40:
         return "learning"
 
     return "needs_practice"
@@ -132,6 +131,7 @@ def find_progress_record(
 
 def update_student_progress(
     request: AssessmentRequest,
+    student_id: str,
 ) -> dict:
     """
     Recalculate and persist adaptive learning progress.
@@ -142,7 +142,7 @@ def update_student_progress(
         supabase
         .table("assessment_results")
         .select("*")
-        .eq("student_id", request.student_id)
+        .eq("student_id", student_id)
         .eq("subject", request.subject)
         .eq("topic", request.topic)
         .execute()
@@ -159,13 +159,13 @@ def update_student_progress(
     assessed_at = datetime.now(timezone.utc).isoformat()
 
     existing_progress = find_progress_record(
-        request.student_id,
+        student_id,
         request.subject,
         request.topic,
     )
 
     progress_data = {
-        "student_id": request.student_id,
+        "student_id": student_id,
         "subject": request.subject,
         "topic": request.topic,
         "mastery_score": mastery,
@@ -197,18 +197,19 @@ def update_student_progress(
     return result.data[0]
 
 
-@router.post("", response_model=AssessmentResponse)
-def create_assessment(request: AssessmentRequest):
+@router.post("/{student_id}", response_model=AssessmentResponse)
+def create_assessment(student_id: str, request: AssessmentRequest, student: dict = Depends(get_current_student)):
 
     try:
-        # ---------------------------------------------------------
-        # 1. Save assessment result
-        # ---------------------------------------------------------
+        # 1. Prepare assessment result
+        assessment_data = request.model_dump()
+        assessment_data["student_id"] = student["id"]
 
+        # 1. Save assessment result
         result = (
             supabase
             .table("assessment_results")
-            .insert(request.model_dump())
+            .insert(assessment_data)
             .execute()
         )
 
@@ -220,16 +221,10 @@ def create_assessment(request: AssessmentRequest):
 
         assessment = result.data[0]
 
-        # ---------------------------------------------------------
         # 2. Automatically update adaptive progress
-        # ---------------------------------------------------------
+        update_student_progress(request, student["id"])
 
-        update_student_progress(request)
-
-        # ---------------------------------------------------------
         # 3. Return the saved assessment
-        # ---------------------------------------------------------
-
         return assessment
 
     except HTTPException:

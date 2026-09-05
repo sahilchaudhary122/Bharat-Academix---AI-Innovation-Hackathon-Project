@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from database.supabase_client import supabase
+from api.dependencies import get_current_student
 
 router = APIRouter(
     prefix="/api/students",
@@ -7,30 +8,17 @@ router = APIRouter(
 )
 
 @router.get("/{student_id}/dashboard")
-def get_student_dashboard(student_id: str):
+def get_student_dashboard(student_id: str, student: dict = Depends(get_current_student)):
 
     try:
-        # 1. Get student information
-        student_result = (
-            supabase
-            .table("students")
-            .select("*")
-            .eq("id", student_id)
-            .execute()
-        )
-
-        if not student_result.data:
-            raise HTTPException(
-                status_code=404,
-                detail="Student not found"
-            )
-
+        # 1. Get student information (already provided by dependency)
+        
         # 2. Get student progress
         progress_result = (
             supabase
             .table("student_progress")
             .select("*")
-            .eq("student_id", student_id)
+            .eq("student_id", student["id"])
             .execute()
         )
 
@@ -39,7 +27,7 @@ def get_student_dashboard(student_id: str):
             supabase
             .table("lessons")
             .select("*")
-            .eq("student_id", student_id)
+            .eq("student_id", student["id"])
             .execute()
         )
 
@@ -48,13 +36,13 @@ def get_student_dashboard(student_id: str):
             supabase
             .table("assessment_results")
             .select("*")
-            .eq("student_id", student_id)
+            .eq("student_id", student["id"])
             .execute()
         )
 
         # 5. Return complete dashboard
         return {
-            "student": student_result.data[0],
+            "student": student,
             "progress": progress_result.data or [],
             "assessments": assessment_result.data or [],
             "lessons": lessons_result.data or []

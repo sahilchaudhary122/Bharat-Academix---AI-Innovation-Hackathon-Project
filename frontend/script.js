@@ -1,4 +1,26 @@
-const API_BASE = "http://127.0.0.1:8000";
+// Backend Configuration
+const API_PORTS = [8000, 8001];
+let API_BASE = "";
+
+// Initialize API
+async function initializeAPI() {
+    for (const port of API_PORTS) {
+        const url = `http://127.0.0.1:${port}`;
+        try {
+            const response = await fetch(`${url}/health`);
+            if (response.ok) {
+                API_BASE = url;
+                console.log(`Connected to backend on ${API_BASE}`);
+                return true;
+            }
+        } catch (e) {
+            console.warn(`Backend not found on port ${port}`);
+        }
+    }
+    showError("Could not connect to any backend API (tried ports 8000, 8001). Please ensure the backend is running.");
+    loading.classList.add("hidden");
+    return false;
+}
 
 // Your existing student UUID
 const STUDENT_ID = "89c9c522-65c8-4743-99e2-60bc9d181a18";
@@ -60,22 +82,206 @@ const generatedVideo =
     document.getElementById("generated-video");
 
 
-// Store the latest generated lesson
-let currentLesson = null;
+// QA Flow Elements
+const qaSection = document.getElementById("qa-section");
+const questionText = document.getElementById("question-text");
+const studentAnswerInput = document.getElementById("student-answer");
+const submitAnswerButton = document.getElementById("submit-answer-button");
+const evaluationContainer = document.getElementById("evaluation-container");
+const evaluationResult = document.getElementById("evaluation-result");
+const evaluationFeedback = document.getElementById("evaluation-feedback");
+const misconceptionText = document.getElementById("misconception-text");
+const nextStepButton = document.getElementById("next-step-button");
+
+// Get Next Teacher Step
+async function getTeacherNextStep(lessonId) {
+    try {
+        const response = await fetch(
+            `${API_BASE}/api/lesson/${lessonId}/teacher`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    student_id: STUDENT_ID,
+                    difficulty: "beginner" // Should probably be dynamic
+                })
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error("Failed to get next teacher step.");
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error("Error getting next teacher step:", error);
+        return null;
+    }
+}
+
+// Submit Answer
+submitAnswerButton.addEventListener("click", async () => {
+    const answer = studentAnswerInput.value.trim();
+    if (!answer) return;
+
+    const lessonId = currentLesson.lesson_id;
+    const concept = currentLesson.segments[0].concept; // Simplified for now
+    const question = questionText.textContent;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/lesson/evaluate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                lesson_id: lessonId,
+                student_id: STUDENT_ID,
+                concept: concept,
+                question: question,
+                student_answer: answer,
+                expected_answer: "...", // Need to get this from somewhere
+                subject: currentLesson.subject,
+                topic: currentLesson.topic
+            })
+        });
+
+        const result = await response.json();
+        displayEvaluation(result);
+    } catch (error) {
+        console.error("Evaluation error:", error);
+        showError("Failed to evaluate answer.");
+    }
+});
+
+// Display Evaluation
+function displayEvaluation(result) {
+    evaluationContainer.classList.remove("hidden");
+    evaluationResult.textContent = result.correct ? "Correct!" : "Incorrect";
+    evaluationFeedback.textContent = result.feedback;
+    
+    if (result.misconception_description) {
+        misconceptionText.textContent = `Misconception: ${result.misconception_description}`;
+        misconceptionText.classList.remove("hidden");
+    } else {
+        misconceptionText.classList.add("hidden");
+    }
+    
+    nextStepButton.classList.remove("hidden");
+}
+
+// Next Step
+nextStepButton.addEventListener("click", async () => {
+    // Logic to move to next step
+    evaluationContainer.classList.add("hidden");
+    studentAnswerInput.value = "";
+    // Fetch next step...
+});
 
 
+
+// Auth State
+let isLoginMode = true;
+
+// Auth UI Elements
+const authSection = document.getElementById("auth-section");
+const authForm = document.getElementById("auth-form");
+const authTitle = document.getElementById("auth-title");
+const authButton = document.getElementById("auth-button");
+const authToggleText = document.getElementById("auth-toggle-text");
+const authToggleButton = document.getElementById("auth-toggle-button");
+const authEmailInput = document.getElementById("auth-email");
+const authPasswordInput = document.getElementById("auth-password");
+
+// Auth Toggle Listener
+authToggleButton.addEventListener("click", () => {
+    isLoginMode = !isLoginMode;
+    authTitle.textContent = isLoginMode ? "Login" : "Sign Up";
+    authButton.textContent = isLoginMode ? "Login" : "Sign Up";
+    authToggleText.textContent = isLoginMode ? "Don't have an account?" : "Already have an account?";
+    authToggleButton.textContent = isLoginMode ? "Sign Up" : "Login";
+});
+
+// Auth Form Listener
+authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    if (!API_BASE) {
+        const success = await initializeAPI();
+        if (!success) return;
+    }
+
+    const email = authEmailInput.value;
+    const password = authPasswordInput.value;
+    const endpoint = isLoginMode ? "/api/auth/login" : "/api/auth/signup";
+
+    try {
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+        });
+
+        if (!response.ok) {
+            throw new Error(isLoginMode ? "Login failed" : "Sign up failed");
+        }
+
+        const data = await response.json();
+        
+        // Handle token storage
+        // Assuming response structure: { session: { access_token: "..." } } or similar
+        const token = data.session?.access_token || data.access_token;
+        if (token) {
+            setAuthToken(token);
+            alert(isLoginMode ? "Login successful!" : "Sign up successful! Please login.");
+            if (isLoginMode) {
+                authSection.classList.add("hidden");
+                loadDashboard();
+            } else {
+                isLoginMode = true;
+                authToggleButton.click();
+            }
+        } else {
+            throw new Error("No token received");
+        }
+    } catch (error) {
+        console.error("Auth error:", error);
+        alert(error.message);
+    }
+});
+
+function getAuthToken() {
+    return localStorage.getItem("auth_token");
+}
+
+function setAuthToken(token) {
+    localStorage.setItem("auth_token", token);
+}
+
+function getAuthHeaders() {
+    const token = getAuthToken();
+    return {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    };
+}
 
 // Load Dashboard
-
-
 async function loadDashboard() {
+    if (!API_BASE) {
+        const success = await initializeAPI();
+        if (!success) return;
+    }
 
     try {
 
         hideError();
 
         const response = await fetch(
-            `${API_BASE}/api/students/${STUDENT_ID}/dashboard`
+            `${API_BASE}/api/students/${STUDENT_ID}/dashboard`,
+            {
+                headers: getAuthHeaders()
+            }
         );
 
         if (!response.ok) {
@@ -83,6 +289,7 @@ async function loadDashboard() {
                 `Dashboard request failed: ${response.status}`
             );
         }
+
 
         const data = await response.json();
 
@@ -317,81 +524,76 @@ function displayAssessments(assessments) {
 
 
 
+// Global Lesson State
+let currentLesson = null;
+
 // Display Previous Lessons
-
-
 function displayLessons(lessons) {
-
     lessonsContainer.innerHTML = "";
 
     if (!lessons || lessons.length === 0) {
-
         lessonsContainer.innerHTML =
             `<div class="empty">
                 No previous lessons yet.
             </div>`;
-
         lessonsSection.classList.remove("hidden");
-
         return;
     }
 
     lessons.forEach(lesson => {
-
-        const card =
-            document.createElement("div");
-
-        card.className =
-            "lesson-card";
-
+        const card = document.createElement("div");
+        card.className = "lesson-card";
         card.innerHTML = `
-            <h3>
-                ${escapeHTML(
-                    lesson.title ||
-                    "Untitled Lesson"
-                )}
-            </h3>
-
+            <h3>${escapeHTML(lesson.title || "Untitled Lesson")}</h3>
             <div class="lesson-info">
-
-                <span>
-                    Subject:
-                    ${escapeHTML(
-                        lesson.subject || "-"
-                    )}
-                </span>
-
-                <span>
-                    Topic:
-                    ${escapeHTML(
-                        lesson.topic || "-"
-                    )}
-                </span>
-
-                <span>
-                    Difficulty:
-                    ${escapeHTML(
-                        lesson.difficulty || "-"
-                    )}
-                </span>
-
-                <span>
-                    Duration:
-                    ${escapeHTML(
-                        String(
-                            lesson.total_duration_minutes ?? "-"
-                        )
-                    )} min
-                </span>
-
+                <span>Subject: ${escapeHTML(lesson.subject || "-")}</span>
+                <span>Topic: ${escapeHTML(lesson.topic || "-")}</span>
             </div>
+            <button class="start-lesson-button" data-lesson-id="${lesson.id}">Start Lesson</button>
         `;
+
+        card.querySelector(".start-lesson-button").addEventListener("click", () => {
+            startLesson(lesson);
+        });
 
         lessonsContainer.appendChild(card);
     });
 
     lessonsSection.classList.remove("hidden");
 }
+
+// Start Lesson Demo
+async function startLesson(lesson) {
+    // Fetch full lesson state to get segments
+    try {
+        const response = await fetch(`${API_BASE}/api/lesson/${lesson.id}/state?student_id=${STUDENT_ID}`);
+        if (!response.ok) throw new Error("Failed to load lesson state");
+        const lessonState = await response.json();
+        
+        currentLesson = { ...lesson, lesson_id: lesson.id, ...lessonState };
+    } catch (e) {
+        console.error("Error loading lesson state:", e);
+        currentLesson = { ...lesson, lesson_id: lesson.id, segments: [{concept: "Unknown"}] };
+    }
+
+    // Hide dashboard sections
+    studentSection.classList.add("hidden");
+    progressSection.classList.add("hidden");
+    assessmentSection.classList.add("hidden");
+    lessonsSection.classList.add("hidden");
+
+    // Show QA section
+    qaSection.classList.remove("hidden");
+
+    // Get next step
+    const step = await getTeacherNextStep(lesson.id);
+    if (step && step.question) {
+        questionText.textContent = step.question;
+    } else {
+        questionText.textContent = "Teacher is ready. Please ask a question or await input.";
+    }
+}
+
 
 
 
@@ -418,6 +620,9 @@ lessonForm.addEventListener(
             Number(
                 document.getElementById("time").value
             );
+
+        const language =
+            document.getElementById("language").value;
 
         if (!subject || !topic || !time) {
 
@@ -478,7 +683,7 @@ lessonForm.addEventListener(
                     student.current_level,
 
                 language:
-                    student.preferred_language,
+                    language || student.preferred_language,
 
                 learning_goal:
                     student.learning_goals,
@@ -566,7 +771,7 @@ lessonForm.addEventListener(
 // Display Generated Lesson
 
 
-function displayGeneratedLesson(lesson) {
+async function displayGeneratedLesson(lesson) {
 
     lessonTitle.textContent =
         lesson.title ||
@@ -676,6 +881,13 @@ function displayGeneratedLesson(lesson) {
     generatedLesson.classList.remove(
         "hidden"
     );
+
+    // Trigger Teacher Agent
+    const nextStep = await getTeacherNextStep(lesson.lesson_id);
+    if (nextStep && nextStep.teacher_status === "WAITING_FOR_STUDENT") {
+        qaSection.classList.remove("hidden");
+        questionText.textContent = nextStep.content.explanation; // Assuming explanation is the question
+    }
 
     // IMPORTANT:
     // Show media section after lesson generation
@@ -1132,9 +1344,50 @@ function escapeHTML(value) {
     return div.innerHTML;
 }
 
+// Theme Toggle
+const themeToggle = document.getElementById("theme-toggle");
 
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    const newTheme = currentTheme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+    themeToggle.textContent = newTheme === "dark" ? "☀️" : "🌙";
+}
+
+// Initialize Theme
+const savedTheme = localStorage.getItem("theme") || "light";
+document.documentElement.setAttribute("data-theme", savedTheme);
+themeToggle.textContent = savedTheme === "dark" ? "☀️" : "🌙";
+
+themeToggle.addEventListener("click", toggleTheme);
+
+// Add Demo AI Teacher Button
+function addDemoAITeacherButton() {
+    const statusDiv = document.querySelector(".status");
+    if (!statusDiv) return;
+
+    const demoButton = document.createElement("button");
+    demoButton.id = "ai-teacher-demo-button";
+    demoButton.textContent = "Start Demo";
+    demoButton.style.marginLeft = "10px";
+    demoButton.onclick = () => {
+        startLesson({
+            id: "0d838683-d5e9-4603-9e0e-851b164af666",
+            title: "Newton's Third Law of Motion",
+            subject: "Physics",
+            topic: "Newton's Third Law of Motion"
+        });
+    };
+    statusDiv.insertBefore(demoButton, statusDiv.firstChild);
+}
+
+// Call button addition after page load
+window.addEventListener('load', addDemoAITeacherButton);
 
 // Start Application
-
-
-loadDashboard();
+async function startApp() {
+    authSection.classList.add("hidden");
+    await loadDashboard();
+}
+startApp();

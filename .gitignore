@@ -1,5 +1,8 @@
+# Local AI agent configuration/state
+.ai/
+.gemini/
+GEMINI.md
 # Environment Variables / Secrets
-
 .env
 .env.local
 .env.*.local
@@ -93,3 +96,6 @@ vite.config.ts.timestamp-*
 *.pid
 *.seed
 *.pid.lock
+# Large AI model assets
+SadTalker/
+backend/gfpgan/

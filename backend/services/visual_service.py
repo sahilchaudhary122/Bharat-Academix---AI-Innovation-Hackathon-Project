@@ -7,7 +7,10 @@ from xml.sax.saxutils import escape
 from dotenv import load_dotenv
 from google import genai
 
+
+# ============================================================
 # CONFIGURATION
+# ============================================================
 
 load_dotenv()
 
@@ -19,7 +22,10 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 
-# Generated media directory
+# ============================================================
+# GENERATED MEDIA DIRECTORY
+# ============================================================
+
 MEDIA_DIR = (
     Path(__file__).resolve().parent.parent
     / "media"
@@ -29,9 +35,9 @@ MEDIA_DIR = (
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-
+# ============================================================
 # SVG FALLBACK GENERATOR
-
+# ============================================================
 
 def _create_svg_fallback(
     subject: str,
@@ -43,16 +49,16 @@ def _create_svg_fallback(
     """
     Create a topic-aware educational SVG.
 
-    This is used when Gemini image generation is unavailable
-    or the Gemini image-generation quota has been exceeded.
+    Used when Gemini image generation is unavailable,
+    fails, or its image-generation quota is exceeded.
     """
 
     subject_lower = str(subject).lower().strip()
     topic_lower = str(topic).lower().strip()
 
-    
+    # --------------------------------------------------------
     # Subject colors / headings
-    
+    # --------------------------------------------------------
 
     if "physics" in subject_lower:
         subject_color = "#2563eb"
@@ -78,174 +84,488 @@ def _create_svg_fallback(
         subject_color = "#4f46e5"
         visual_type = "EDUCATIONAL CONCEPT"
 
-
-    
+    # --------------------------------------------------------
     # Escape text for SVG
-    
+    # --------------------------------------------------------
 
     safe_topic = escape(str(topic))
     safe_grade = escape(str(grade))
     safe_concept = escape(str(concept))
     safe_style = escape(str(style))
 
+    # --------------------------------------------------------
+    # Default diagram
+    # --------------------------------------------------------
 
-    
+    diagram = """
+        <rect
+            x="350"
+            y="270"
+            width="580"
+            height="170"
+            rx="20"
+            fill="#eef2ff"
+            stroke="#4f46e5"
+            stroke-width="5"
+        />
+
+        <text
+            x="640"
+            y="350"
+            text-anchor="middle"
+            font-size="30"
+            font-weight="bold"
+            fill="#3730a3"
+        >
+            KEY CONCEPT
+        </text>
+
+        <text
+            x="640"
+            y="395"
+            text-anchor="middle"
+            font-size="23"
+            fill="#374151"
+        >
+            Understand → Apply → Practice
+        </text>
+    """
+
+    # ========================================================
     # PHYSICS
-    
+    # ========================================================
 
     if "physics" in subject_lower:
 
-        
-        # HARMONIC MOTION
-        
+        # ----------------------------------------------------
+        # NEWTON'S THIRD LAW
+        # ----------------------------------------------------
+
+                # ----------------------------------------------------
+        # NEWTON'S THIRD LAW
+        # ----------------------------------------------------
 
         if (
+            "newton" in topic_lower
+            and (
+                "third" in topic_lower
+                or "3rd" in topic_lower
+                or "action" in topic_lower
+                or "reaction" in topic_lower
+            )
+        ):
+
+            diagram = """
+                <!-- =================================================
+                     NEWTON'S THIRD LAW
+                     Person pushes wall
+                     ================================================= -->
+
+                <!-- Ground -->
+                <line
+                    x1="120"
+                    y1="535"
+                    x2="1000"
+                    y2="535"
+                    stroke="#374151"
+                    stroke-width="6"
+                />
+
+                <!-- ================= PERSON ================= -->
+
+                <!-- Head -->
+                <circle
+                    cx="300"
+                    cy="285"
+                    r="42"
+                    fill="#dbeafe"
+                    stroke="#2563eb"
+                    stroke-width="6"
+                />
+
+                <!-- Body -->
+                <line
+                    x1="300"
+                    y1="327"
+                    x2="300"
+                    y2="410"
+                    stroke="#2563eb"
+                    stroke-width="10"
+                />
+
+                <!-- Left leg -->
+                <line
+                    x1="300"
+                    y1="410"
+                    x2="250"
+                    y2="535"
+                    stroke="#2563eb"
+                    stroke-width="10"
+                />
+
+                <!-- Right leg -->
+                <line
+                    x1="300"
+                    y1="410"
+                    x2="350"
+                    y2="535"
+                    stroke="#2563eb"
+                    stroke-width="10"
+                />
+
+                <!-- Arm pushing wall -->
+                <line
+                    x1="300"
+                    y1="345"
+                    x2="420"
+                    y2="375"
+                    stroke="#2563eb"
+                    stroke-width="10"
+                />
+
+                <line
+                    x1="420"
+                    y1="375"
+                    x2="475"
+                    y2="375"
+                    stroke="#2563eb"
+                    stroke-width="10"
+                />
+
+                <!-- Person label -->
+                <text
+                    x="300"
+                    y="570"
+                    text-anchor="middle"
+                    font-size="24"
+                    font-weight="bold"
+                    fill="#1e3a8a"
+                >
+                    PERSON
+                </text>
+
+                <!-- ================= WALL ================= -->
+
+                <rect
+                    x="475"
+                    y="225"
+                    width="55"
+                    height="310"
+                    rx="5"
+                    fill="#d1d5db"
+                    stroke="#374151"
+                    stroke-width="6"
+                />
+
+                <!-- Wall texture -->
+                <line
+                    x1="485"
+                    y1="255"
+                    x2="520"
+                    y2="290"
+                    stroke="#9ca3af"
+                    stroke-width="4"
+                />
+
+                <line
+                    x1="485"
+                    y1="315"
+                    x2="520"
+                    y2="350"
+                    stroke="#9ca3af"
+                    stroke-width="4"
+                />
+
+                <line
+                    x1="485"
+                    y1="375"
+                    x2="520"
+                    y2="410"
+                    stroke="#9ca3af"
+                    stroke-width="4"
+                />
+
+                <line
+                    x1="485"
+                    y1="435"
+                    x2="520"
+                    y2="470"
+                    stroke="#9ca3af"
+                    stroke-width="4"
+                />
+
+                <line
+                    x1="485"
+                    y1="495"
+                    x2="520"
+                    y2="525"
+                    stroke="#9ca3af"
+                    stroke-width="4"
+                />
+
+                <!-- Wall label -->
+                <text
+                    x="502"
+                    y="205"
+                    text-anchor="middle"
+                    font-size="24"
+                    font-weight="bold"
+                    fill="#374151"
+                >
+                    WALL
+                </text>
+
+                <!-- ================= ACTION FORCE ================= -->
+
+                <line
+                    x1="405"
+                    y1="315"
+                    x2="730"
+                    y2="315"
+                    stroke="#dc2626"
+                    stroke-width="8"
+                />
+
+                <polygon
+                    points="730,315 695,293 695,337"
+                    fill="#dc2626"
+                />
+
+                <text
+                    x="570"
+                    y="285"
+                    text-anchor="middle"
+                    font-size="21"
+                    font-weight="bold"
+                    fill="#991b1b"
+                >
+                    Action: Person → Wall
+                </text>
+
+                <!-- ================= REACTION FORCE ================= -->
+
+                <line
+                    x1="405"
+                    y1="445"
+                    x2="80"
+                    y2="445"
+                    stroke="#059669"
+                    stroke-width="8"
+                />
+
+                <polygon
+                    points="80,445 115,423 115,467"
+                    fill="#059669"
+                />
+
+                <text
+                    x="245"
+                    y="415"
+                    text-anchor="middle"
+                    font-size="21"
+                    font-weight="bold"
+                    fill="#065f46"
+                >
+                    Reaction: Wall → Person
+                </text>
+
+                <!-- ================= EXPLANATION BOX ================= -->
+
+                <rect
+                    x="680"
+                    y="350"
+                    width="310"
+                    height="145"
+                    rx="18"
+                    fill="#eff6ff"
+                    stroke="#2563eb"
+                    stroke-width="4"
+                />
+
+                <text
+                    x="835"
+                    y="385"
+                    text-anchor="middle"
+                    font-size="21"
+                    font-weight="bold"
+                    fill="#1e3a8a"
+                >
+                    Equal magnitude
+                </text>
+
+                <text
+                    x="835"
+                    y="420"
+                    text-anchor="middle"
+                    font-size="21"
+                    font-weight="bold"
+                    fill="#1e3a8a"
+                >
+                    Opposite direction
+                </text>
+
+                <text
+                    x="835"
+                    y="460"
+                    text-anchor="middle"
+                    font-size="24"
+                    font-weight="bold"
+                    fill="#111827"
+                >
+                    F₁ = −F₂
+                </text>
+            """
+
+        # ----------------------------------------------------
+        # HARMONIC MOTION
+        # ----------------------------------------------------
+
+        elif (
             "harmonic" in topic_lower
             or "oscillation" in topic_lower
             or "oscillatory" in topic_lower
         ):
 
             diagram = """
-            <!-- Fixed wall -->
-            <line
-                x1="180"
-                y1="280"
-                x2="180"
-                y2="440"
-                stroke="#374151"
-                stroke-width="9"
-            />
+                <!-- Fixed wall -->
+                <line
+                    x1="180"
+                    y1="220"
+                    x2="180"
+                    y2="430"
+                    stroke="#374151"
+                    stroke-width="8"
+                />
 
-            <!-- Spring -->
-            <path
-                d="
-                    M180 360
-                    L220 360
-                    L245 315
-                    L285 405
-                    L325 315
-                    L365 405
-                    L405 315
-                    L445 405
-                    L485 360
-                "
-                fill="none"
-                stroke="#7c3aed"
-                stroke-width="8"
-            />
+                <!-- Spring -->
+                <path
+                    d="
+                        M180 325
+                        L220 325
+                        L245 280
+                        L285 370
+                        L325 280
+                        L365 370
+                        L405 280
+                        L445 370
+                        L485 325
+                    "
+                    fill="none"
+                    stroke="#7c3aed"
+                    stroke-width="8"
+                />
 
-            <!-- Mass -->
-            <rect
-                x="485"
-                y="300"
-                width="150"
-                height="120"
-                rx="15"
-                fill="#ede9fe"
-                stroke="#7c3aed"
-                stroke-width="6"
-            />
+                <!-- Mass -->
+                <rect
+                    x="485"
+                    y="265"
+                    width="150"
+                    height="120"
+                    rx="15"
+                    fill="#ede9fe"
+                    stroke="#7c3aed"
+                    stroke-width="6"
+                />
 
-            <text
-                x="560"
-                y="370"
-                text-anchor="middle"
-                font-size="27"
-                font-weight="bold"
-                fill="#4c1d95"
-            >
-                Mass
-            </text>
+                <text
+                    x="560"
+                    y="338"
+                    text-anchor="middle"
+                    font-size="27"
+                    font-weight="bold"
+                    fill="#4c1d95"
+                >
+                    MASS
+                </text>
 
-            <!-- Equilibrium line -->
-            <line
-                x1="560"
-                y1="225"
-                x2="560"
-                y2="500"
-                stroke="#9ca3af"
-                stroke-width="3"
-                stroke-dasharray="12 8"
-            />
+                <!-- Equilibrium -->
+                <line
+                    x1="560"
+                    y1="200"
+                    x2="560"
+                    y2="450"
+                    stroke="#9ca3af"
+                    stroke-width="3"
+                    stroke-dasharray="12 8"
+                />
 
-            <text
-                x="560"
-                y="205"
-                text-anchor="middle"
-                font-size="21"
-                font-weight="bold"
-                fill="#374151"
-            >
-                Equilibrium Position
-            </text>
+                <text
+                    x="560"
+                    y="180"
+                    text-anchor="middle"
+                    font-size="20"
+                    font-weight="bold"
+                    fill="#374151"
+                >
+                    Equilibrium
+                </text>
 
-            <!-- Right motion -->
-            <line
-                x1="635"
-                y1="350"
-                x2="830"
-                y2="350"
-                stroke="#dc2626"
-                stroke-width="8"
-            />
+                <!-- Motion arrow -->
+                <line
+                    x1="650"
+                    y1="325"
+                    x2="850"
+                    y2="325"
+                    stroke="#dc2626"
+                    stroke-width="8"
+                />
 
-            <polygon
-                points="830,350 800,332 800,368"
-                fill="#dc2626"
-            />
+                <polygon
+                    points="850,325 815,303 815,347"
+                    fill="#dc2626"
+                />
 
-            <text
-                x="735"
-                y="320"
-                text-anchor="middle"
-                font-size="22"
-                fill="#991b1b"
-            >
-                Oscillatory Motion
-            </text>
+                <text
+                    x="750"
+                    y="290"
+                    text-anchor="middle"
+                    font-size="21"
+                    fill="#991b1b"
+                >
+                    Oscillatory Motion
+                </text>
 
-            <!-- Restoring force -->
-            <line
-                x1="485"
-                y1="455"
-                x2="300"
-                y2="455"
-                stroke="#059669"
-                stroke-width="8"
-            />
+                <!-- Restoring force -->
+                <line
+                    x1="485"
+                    y1="430"
+                    x2="300"
+                    y2="430"
+                    stroke="#059669"
+                    stroke-width="8"
+                />
 
-            <polygon
-                points="300,455 330,437 330,473"
-                fill="#059669"
-            />
+                <polygon
+                    points="300,430 335,408 335,452"
+                    fill="#059669"
+                />
 
-            <text
-                x="390"
-                y="495"
-                text-anchor="middle"
-                font-size="22"
-                fill="#065f46"
-            >
-                Restoring Force
-            </text>
+                <text
+                    x="395"
+                    y="470"
+                    text-anchor="middle"
+                    font-size="20"
+                    fill="#065f46"
+                >
+                    Restoring Force
+                </text>
 
-            <!-- Formula -->
-            <text
-                x="560"
-                y="555"
-                text-anchor="middle"
-                font-size="32"
-                font-weight="bold"
-                fill="#111827"
-            >
-                F = −kx
-            </text>
+                <!-- Formula -->
+                <text
+                    x="560"
+                    y="545"
+                    text-anchor="middle"
+                    font-size="31"
+                    font-weight="bold"
+                    fill="#111827"
+                >
+                    F = −kx
+                </text>
             """
 
-
-        
+        # ----------------------------------------------------
         # GRAVITATION
-        
+        # ----------------------------------------------------
 
         elif (
             "gravitation" in topic_lower
@@ -254,170 +574,187 @@ def _create_svg_fallback(
         ):
 
             diagram = """
-            <!-- Object -->
-            <rect
-                x="405"
-                y="160"
-                width="110"
-                height="85"
-                rx="12"
-                fill="#fee2e2"
-                stroke="#dc2626"
-                stroke-width="5"
-            />
+                <!-- Object -->
+                <rect
+                    x="400"
+                    y="205"
+                    width="120"
+                    height="85"
+                    rx="12"
+                    fill="#fee2e2"
+                    stroke="#dc2626"
+                    stroke-width="5"
+                />
 
-            <text
-                x="460"
-                y="215"
-                text-anchor="middle"
-                font-size="23"
-                font-weight="bold"
-                fill="#991b1b"
-            >
-                Object
-            </text>
+                <text
+                    x="460"
+                    y="258"
+                    text-anchor="middle"
+                    font-size="23"
+                    font-weight="bold"
+                    fill="#991b1b"
+                >
+                    OBJECT
+                </text>
 
-            <!-- Gravity arrow -->
-            <line
-                x1="460"
-                y1="250"
-                x2="460"
-                y2="390"
-                stroke="#dc2626"
-                stroke-width="8"
-            />
+                <!-- Gravity arrow -->
+                <line
+                    x1="460"
+                    y1="295"
+                    x2="460"
+                    y2="370"
+                    stroke="#dc2626"
+                    stroke-width="8"
+                />
 
-            <polygon
-                points="460,420 435,380 485,380"
-                fill="#dc2626"
-            />
+                <polygon
+                    points="460,405 435,365 485,365"
+                    fill="#dc2626"
+                />
 
-            <text
-                x="520"
-                y="325"
-                font-size="24"
-                fill="#991b1b"
-            >
-                Gravity (g)
-            </text>
+                <text
+                    x="535"
+                    y="345"
+                    font-size="23"
+                    fill="#991b1b"
+                >
+                    Gravity
+                </text>
 
-            <!-- Earth -->
-            <circle
-                cx="460"
-                cy="535"
-                r="120"
-                fill="#dbeafe"
-                stroke="#2563eb"
-                stroke-width="6"
-            />
+                <!-- Earth -->
+                <circle
+                    cx="460"
+                    cy="505"
+                    r="95"
+                    fill="#dbeafe"
+                    stroke="#2563eb"
+                    stroke-width="6"
+                />
 
-            <text
-                x="460"
-                y="545"
-                text-anchor="middle"
-                font-size="30"
-                font-weight="bold"
-                fill="#1e3a8a"
-            >
-                EARTH
-            </text>
+                <text
+                    x="460"
+                    y="515"
+                    text-anchor="middle"
+                    font-size="29"
+                    font-weight="bold"
+                    fill="#1e3a8a"
+                >
+                    EARTH
+                </text>
 
-            <!-- Formula -->
-            <text
-                x="780"
-                y="530"
-                text-anchor="middle"
-                font-size="28"
-                font-weight="bold"
-                fill="#111827"
-            >
-                F = Gm₁m₂ / r²
-            </text>
+                <!-- Formula -->
+                <text
+                    x="820"
+                    y="500"
+                    text-anchor="middle"
+                    font-size="27"
+                    font-weight="bold"
+                    fill="#111827"
+                >
+                    F = Gm₁m₂ / r²
+                </text>
             """
 
-
-        
+        # ----------------------------------------------------
         # WAVES
-        
+        # ----------------------------------------------------
 
         elif "wave" in topic_lower:
 
             diagram = """
-            <!-- Axis -->
-            <line
-                x1="160"
-                y1="360"
-                x2="970"
-                y2="360"
-                stroke="#374151"
-                stroke-width="3"
-            />
+                <!-- Axis -->
+                <line
+                    x1="150"
+                    y1="330"
+                    x2="990"
+                    y2="330"
+                    stroke="#374151"
+                    stroke-width="3"
+                />
 
-            <!-- Wave -->
-            <path
-                d="
-                    M160 360
-                    C210 220 260 220 310 360
-                    C360 500 410 500 460 360
-                    C510 220 560 220 610 360
-                    C660 500 710 500 760 360
-                    C810 220 860 220 910 360
-                    C935 420 955 420 970 360
-                "
-                fill="none"
-                stroke="#2563eb"
-                stroke-width="7"
-            />
+                <!-- Wave -->
+                <path
+                    d="
+                        M150 330
+                        C200 200 250 200 300 330
+                        C350 460 400 460 450 330
+                        C500 200 550 200 600 330
+                        C650 460 700 460 750 330
+                        C800 200 850 200 900 330
+                        C940 430 970 430 990 330
+                    "
+                    fill="none"
+                    stroke="#2563eb"
+                    stroke-width="7"
+                />
 
-            <!-- Crest -->
-            <text
-                x="260"
-                y="190"
-                text-anchor="middle"
-                font-size="24"
-                font-weight="bold"
-                fill="#1e3a8a"
-            >
-                Crest
-            </text>
+                <!-- Crest -->
+                <text
+                    x="225"
+                    y="175"
+                    text-anchor="middle"
+                    font-size="23"
+                    font-weight="bold"
+                    fill="#1e3a8a"
+                >
+                    CREST
+                </text>
 
-            <!-- Trough -->
-            <text
-                x="410"
-                y="545"
-                text-anchor="middle"
-                font-size="24"
-                font-weight="bold"
-                fill="#1e3a8a"
-            >
-                Trough
-            </text>
+                <!-- Trough -->
+                <text
+                    x="375"
+                    y="500"
+                    text-anchor="middle"
+                    font-size="23"
+                    font-weight="bold"
+                    fill="#1e3a8a"
+                >
+                    TROUGH
+                </text>
 
-            <!-- Wavelength -->
-            <line
-                x1="310"
-                y1="600"
-                x2="610"
-                y2="600"
-                stroke="#7c3aed"
-                stroke-width="5"
-            />
+                <!-- Wavelength -->
+                <line
+                    x1="300"
+                    y1="555"
+                    x2="600"
+                    y2="555"
+                    stroke="#7c3aed"
+                    stroke-width="5"
+                />
 
-            <text
-                x="460"
-                y="635"
-                text-anchor="middle"
-                font-size="25"
-                fill="#4c1d95"
-            >
-                Wavelength
-            </text>
+                <text
+                    x="450"
+                    y="595"
+                    text-anchor="middle"
+                    font-size="24"
+                    fill="#4c1d95"
+                >
+                    Wavelength
+                </text>
+
+                <!-- Amplitude -->
+                <line
+                    x1="225"
+                    y1="330"
+                    x2="225"
+                    y2="205"
+                    stroke="#059669"
+                    stroke-width="5"
+                />
+
+                <text
+                    x="275"
+                    y="270"
+                    font-size="22"
+                    fill="#065f46"
+                >
+                    Amplitude
+                </text>
             """
 
-
-        
+        # ----------------------------------------------------
         # WORK / ENERGY
-        
+        # ----------------------------------------------------
 
         elif (
             "work" in topic_lower
@@ -425,98 +762,100 @@ def _create_svg_fallback(
         ):
 
             diagram = """
-            <!-- Ground -->
-            <line
-                x1="160"
-                y1="470"
-                x2="950"
-                y2="470"
-                stroke="#374151"
-                stroke-width="5"
-            />
+                <!-- Ground -->
+                <line
+                    x1="150"
+                    y1="450"
+                    x2="990"
+                    y2="450"
+                    stroke="#374151"
+                    stroke-width="5"
+                />
 
-            <!-- Object -->
-            <rect
-                x="300"
-                y="350"
-                width="180"
-                height="120"
-                rx="15"
-                fill="#fef3c7"
-                stroke="#d97706"
-                stroke-width="5"
-            />
+                <!-- Object -->
+                <rect
+                    x="280"
+                    y="330"
+                    width="170"
+                    height="120"
+                    rx="15"
+                    fill="#fef3c7"
+                    stroke="#d97706"
+                    stroke-width="5"
+                />
 
-            <text
-                x="390"
-                y="420"
-                text-anchor="middle"
-                font-size="27"
-                font-weight="bold"
-                fill="#92400e"
-            >
-                Object
-            </text>
+                <text
+                    x="365"
+                    y="402"
+                    text-anchor="middle"
+                    font-size="27"
+                    font-weight="bold"
+                    fill="#92400e"
+                >
+                    OBJECT
+                </text>
 
-            <!-- Force -->
-            <line
-                x1="480"
-                y1="410"
-                x2="760"
-                y2="410"
-                stroke="#dc2626"
-                stroke-width="8"
-            />
+                <!-- Force -->
+                <line
+                    x1="450"
+                    y1="390"
+                    x2="750"
+                    y2="390"
+                    stroke="#dc2626"
+                    stroke-width="8"
+                />
 
-            <polygon
-                points="760,410 730,392 730,428"
-                fill="#dc2626"
-            />
+                <polygon
+                    points="750,390 715,368 715,412"
+                    fill="#dc2626"
+                />
 
-            <text
-                x="620"
-                y="380"
-                text-anchor="middle"
-                font-size="23"
-                fill="#991b1b"
-            >
-                Applied Force
-            </text>
+                <text
+                    x="600"
+                    y="355"
+                    text-anchor="middle"
+                    font-size="22"
+                    fill="#991b1b"
+                >
+                    Applied Force
+                </text>
 
-            <!-- Distance -->
-            <line
-                x1="300"
-                y1="520"
-                x2="760"
-                y2="520"
-                stroke="#2563eb"
-                stroke-width="5"
-            />
+                <!-- Distance -->
+                <line
+                    x1="280"
+                    y1="500"
+                    x2="750"
+                    y2="500"
+                    stroke="#2563eb"
+                    stroke-width="5"
+                />
 
-            <text
-                x="530"
-                y="555"
-                text-anchor="middle"
-                font-size="25"
-                fill="#1e3a8a"
-            >
-                Distance
-            </text>
+                <text
+                    x="515"
+                    y="540"
+                    text-anchor="middle"
+                    font-size="24"
+                    fill="#1e3a8a"
+                >
+                    Distance
+                </text>
 
-            <text
-                x="530"
-                y="620"
-                text-anchor="middle"
-                font-size="31"
-                font-weight="bold"
-                fill="#111827"
-            >
-                W = F × d
-            </text>
+                <!-- Formula -->
+                <text
+                    x="900"
+                    y="280"
+                    text-anchor="middle"
+                    font-size="28"
+                    font-weight="bold"
+                    fill="#111827"
+                >
+                    W = F × d
+                </text>
             """
 
-        # ELECTRICITY / CIRCUIT
-  
+        # ----------------------------------------------------
+        # ELECTRICITY / CIRCUITS
+        # ----------------------------------------------------
 
         elif (
             "electricity" in topic_lower
@@ -525,643 +864,519 @@ def _create_svg_fallback(
         ):
 
             diagram = """
-            <!-- Circuit -->
-            <line
-                x1="260"
-                y1="280"
-                x2="700"
-                y2="280"
-                stroke="#374151"
-                stroke-width="5"
-            />
+                <!-- Circuit wire -->
+                <line
+                    x1="250"
+                    y1="300"
+                    x2="450"
+                    y2="300"
+                    stroke="#0891b2"
+                    stroke-width="7"
+                />
 
-            <line
-                x1="260"
-                y1="500"
-                x2="700"
-                y2="500"
-                stroke="#374151"
-                stroke-width="5"
-            />
+                <line
+                    x1="550"
+                    y1="300"
+                    x2="850"
+                    y2="300"
+                    stroke="#0891b2"
+                    stroke-width="7"
+                />
 
-            <line
-                x1="260"
-                y1="280"
-                x2="260"
-                y2="500"
-                stroke="#374151"
-                stroke-width="5"
-            />
+                <line
+                    x1="850"
+                    y1="300"
+                    x2="850"
+                    y2="470"
+                    stroke="#0891b2"
+                    stroke-width="7"
+                />
 
-            <line
-                x1="700"
-                y1="280"
-                x2="700"
-                y2="500"
-                stroke="#374151"
-                stroke-width="5"
-            />
+                <line
+                    x1="850"
+                    y1="470"
+                    x2="250"
+                    y2="470"
+                    stroke="#0891b2"
+                    stroke-width="7"
+                />
 
-            <!-- Battery -->
-            <line
-                x1="235"
-                y1="360"
-                x2="285"
-                y2="360"
-                stroke="#dc2626"
-                stroke-width="8"
-            />
+                <line
+                    x1="250"
+                    y1="470"
+                    x2="250"
+                    y2="300"
+                    stroke="#0891b2"
+                    stroke-width="7"
+                />
 
-            <line
-                x1="245"
-                y1="400"
-                x2="275"
-                y2="400"
-                stroke="#dc2626"
-                stroke-width="5"
-            />
+                <!-- Battery -->
+                <line
+                    x1="450"
+                    y1="260"
+                    x2="450"
+                    y2="340"
+                    stroke="#111827"
+                    stroke-width="8"
+                />
 
-            <text
-                x="180"
-                y="385"
-                font-size="21"
-                fill="#991b1b"
-            >
-                Battery
-            </text>
+                <line
+                    x1="500"
+                    y1="275"
+                    x2="500"
+                    y2="325"
+                    stroke="#111827"
+                    stroke-width="4"
+                />
 
-            <!-- Bulb -->
-            <circle
-                cx="700"
-                cy="390"
-                r="60"
-                fill="#fef3c7"
-                stroke="#d97706"
-                stroke-width="5"
-            />
+                <text
+                    x="475"
+                    y="220"
+                    text-anchor="middle"
+                    font-size="22"
+                    font-weight="bold"
+                    fill="#111827"
+                >
+                    BATTERY
+                </text>
 
-            <text
-                x="700"
-                y="398"
-                text-anchor="middle"
-                font-size="22"
-                font-weight="bold"
-                fill="#92400e"
-            >
-                Bulb
-            </text>
+                <!-- Bulb -->
+                <circle
+                    cx="850"
+                    cy="385"
+                    r="42"
+                    fill="#fef3c7"
+                    stroke="#d97706"
+                    stroke-width="6"
+                />
 
-            <!-- Current -->
-            <text
-                x="480"
-                y="245"
-                text-anchor="middle"
-                font-size="25"
-                fill="#2563eb"
-            >
-                Electric Current
-            </text>
+                <text
+                    x="850"
+                    y="393"
+                    text-anchor="middle"
+                    font-size="20"
+                    font-weight="bold"
+                    fill="#92400e"
+                >
+                    BULB
+                </text>
 
-            <text
-                x="480"
-                y="590"
-                text-anchor="middle"
-                font-size="28"
-                font-weight="bold"
-                fill="#111827"
-            >
-                Closed Circuit → Current Flow
-            </text>
+                <!-- Current arrow -->
+                <polygon
+                    points="680,292 650,275 650,309"
+                    fill="#dc2626"
+                />
+
+                <text
+                    x="680"
+                    y="255"
+                    text-anchor="middle"
+                    font-size="22"
+                    fill="#991b1b"
+                >
+                    Current
+                </text>
+
+                <!-- Closed circuit -->
+                <text
+                    x="550"
+                    y="550"
+                    text-anchor="middle"
+                    font-size="27"
+                    font-weight="bold"
+                    fill="#111827"
+                >
+                    Closed Circuit → Current Flows
+                </text>
             """
 
-        # FORCE / NEWTON'S LAWS / MOTION
-
-
-        elif (
-            "force" in topic_lower
-            or "newton" in topic_lower
-            or topic_lower == "motion"
-            or "laws of motion" in topic_lower
-        ):
-
-            diagram = """
-            <!-- Ground -->
-            <line
-                x1="160"
-                y1="460"
-                x2="950"
-                y2="460"
-                stroke="#374151"
-                stroke-width="5"
-            />
-
-            <!-- Mass -->
-            <rect
-                x="400"
-                y="320"
-                width="170"
-                height="140"
-                rx="15"
-                fill="#dbeafe"
-                stroke="#2563eb"
-                stroke-width="6"
-            />
-
-            <text
-                x="485"
-                y="400"
-                text-anchor="middle"
-                font-size="28"
-                font-weight="bold"
-                fill="#1e3a8a"
-            >
-                Mass
-            </text>
-
-            <!-- Force -->
-            <line
-                x1="570"
-                y1="385"
-                x2="810"
-                y2="385"
-                stroke="#dc2626"
-                stroke-width="8"
-            />
-
-            <polygon
-                points="810,385 780,367 780,403"
-                fill="#dc2626"
-            />
-
-            <text
-                x="690"
-                y="350"
-                text-anchor="middle"
-                font-size="23"
-                fill="#991b1b"
-            >
-                Force
-            </text>
-
-            <!-- Acceleration -->
-            <line
-                x1="400"
-                y1="510"
-                x2="240"
-                y2="510"
-                stroke="#059669"
-                stroke-width="8"
-            />
-
-            <polygon
-                points="240,510 270,492 270,528"
-                fill="#059669"
-            />
-
-            <text
-                x="320"
-                y="550"
-                text-anchor="middle"
-                font-size="23"
-                fill="#065f46"
-            >
-                Acceleration
-            </text>
-
-            <text
-                x="485"
-                y="620"
-                text-anchor="middle"
-                font-size="31"
-                font-weight="bold"
-                fill="#111827"
-            >
-                F = m × a
-            </text>
-            """
-
-
-
-        # DEFAULT PHYSICS
-
-
-        else:
-
-            diagram = """
-            <circle
-                cx="450"
-                cy="350"
-                r="100"
-                fill="#dbeafe"
-                stroke="#2563eb"
-                stroke-width="6"
-            />
-
-            <text
-                x="450"
-                y="360"
-                text-anchor="middle"
-                font-size="28"
-                font-weight="bold"
-                fill="#1e3a8a"
-            >
-                PHYSICS
-            </text>
-
-            <line
-                x1="550"
-                y1="350"
-                x2="780"
-                y2="350"
-                stroke="#dc2626"
-                stroke-width="8"
-            />
-
-            <polygon
-                points="780,350 750,332 750,368"
-                fill="#dc2626"
-            />
-
-            <text
-                x="665"
-                y="320"
-                text-anchor="middle"
-                font-size="22"
-                fill="#991b1b"
-            >
-                Force
-            </text>
-
-            <text
-                x="600"
-                y="520"
-                text-anchor="middle"
-                font-size="30"
-                font-weight="bold"
-                fill="#111827"
-            >
-                Understand → Apply → Practice
-            </text>
-            """
-
-
+    # ========================================================
     # MATHEMATICS
-
+    # ========================================================
 
     elif "math" in subject_lower:
 
         diagram = """
-        <!-- Axes -->
-        <line
-            x1="220"
-            y1="470"
-            x2="900"
-            y2="470"
-            stroke="#374151"
-            stroke-width="4"
-        />
+            <!-- Axes -->
+            <line
+                x1="220"
+                y1="460"
+                x2="950"
+                y2="460"
+                stroke="#374151"
+                stroke-width="4"
+            />
 
-        <line
-            x1="300"
-            y1="520"
-            x2="300"
-            y2="180"
-            stroke="#374151"
-            stroke-width="4"
-        />
+            <line
+                x1="300"
+                y1="530"
+                x2="300"
+                y2="170"
+                stroke="#374151"
+                stroke-width="4"
+            />
 
-        <!-- Graph -->
-        <path
-            d="M300 430 Q470 300 780 210"
-            fill="none"
-            stroke="#7c3aed"
-            stroke-width="7"
-        />
+            <!-- Arrow X -->
+            <polygon
+                points="950,460 925,445 925,475"
+                fill="#374151"
+            />
 
-        <circle
-            cx="520"
-            cy="340"
-            r="11"
-            fill="#7c3aed"
-        />
+            <!-- Arrow Y -->
+            <polygon
+                points="300,170 285,195 315,195"
+                fill="#374151"
+            />
 
-        <text
-            x="560"
-            y="315"
-            font-size="24"
-            fill="#4c1d95"
-        >
-            Mathematical Relationship
-        </text>
+            <!-- Graph -->
+            <path
+                d="M300 430 Q470 320 800 220"
+                fill="none"
+                stroke="#7c3aed"
+                stroke-width="7"
+            />
 
-        <text
-            x="520"
-            y="560"
-            text-anchor="middle"
-            font-size="30"
-            font-weight="bold"
-            fill="#111827"
-        >
-            Concept → Formula → Result
-        </text>
+            <circle
+                cx="520"
+                cy="350"
+                r="11"
+                fill="#7c3aed"
+            />
+
+            <text
+                x="620"
+                y="285"
+                font-size="23"
+                fill="#4c1d95"
+            >
+                Mathematical Relationship
+            </text>
+
+            <text
+                x="580"
+                y="555"
+                text-anchor="middle"
+                font-size="27"
+                font-weight="bold"
+                fill="#111827"
+            >
+                Concept → Formula → Result
+            </text>
         """
 
-
-
+    # ========================================================
     # BIOLOGY
-
+    # ========================================================
 
     elif "biology" in subject_lower:
 
         diagram = """
-        <!-- Cell -->
-        <circle
-            cx="450"
-            cy="350"
-            r="130"
-            fill="#d1fae5"
-            stroke="#059669"
-            stroke-width="6"
-        />
+            <!-- Cell -->
+            <circle
+                cx="470"
+                cy="350"
+                r="135"
+                fill="#d1fae5"
+                stroke="#059669"
+                stroke-width="6"
+            />
 
-        <!-- Nucleus -->
-        <circle
-            cx="450"
-            cy="350"
-            r="55"
-            fill="#a7f3d0"
-            stroke="#047857"
-            stroke-width="5"
-        />
+            <!-- Nucleus -->
+            <circle
+                cx="470"
+                cy="350"
+                r="55"
+                fill="#a7f3d0"
+                stroke="#047857"
+                stroke-width="5"
+            />
 
-        <text
-            x="450"
-            y="360"
-            text-anchor="middle"
-            font-size="25"
-            font-weight="bold"
-            fill="#065f46"
-        >
-            Nucleus
-        </text>
+            <text
+                x="470"
+                y="360"
+                text-anchor="middle"
+                font-size="24"
+                font-weight="bold"
+                fill="#065f46"
+            >
+                Nucleus
+            </text>
 
-        <text
-            x="450"
-            y="180"
-            text-anchor="middle"
-            font-size="25"
-            font-weight="bold"
-            fill="#065f46"
-        >
-            Cell
-        </text>
+            <text
+                x="470"
+                y="175"
+                text-anchor="middle"
+                font-size="25"
+                font-weight="bold"
+                fill="#065f46"
+            >
+                Cell
+            </text>
 
-        <text
-            x="450"
-            y="550"
-            text-anchor="middle"
-            font-size="30"
-            font-weight="bold"
-            fill="#111827"
-        >
-            Structure → Function
-        </text>
+            <!-- Label -->
+            <line
+                x1="570"
+                y1="285"
+                x2="760"
+                y2="220"
+                stroke="#059669"
+                stroke-width="4"
+            />
+
+            <text
+                x="780"
+                y="220"
+                font-size="22"
+                fill="#065f46"
+            >
+                Cell Structure
+            </text>
+
+            <text
+                x="470"
+                y="550"
+                text-anchor="middle"
+                font-size="29"
+                font-weight="bold"
+                fill="#111827"
+            >
+                Structure → Function
+            </text>
         """
 
-
+    # ========================================================
     # CHEMISTRY
-
+    # ========================================================
 
     elif "chemistry" in subject_lower:
 
         diagram = """
-        <!-- Atom A -->
-        <circle
-            cx="350"
-            cy="350"
-            r="70"
-            fill="#fee2e2"
-            stroke="#dc2626"
-            stroke-width="6"
-        />
+            <!-- Atom A -->
+            <circle
+                cx="350"
+                cy="350"
+                r="70"
+                fill="#fee2e2"
+                stroke="#dc2626"
+                stroke-width="6"
+            />
 
-        <!-- Atom B -->
-        <circle
-            cx="600"
-            cy="350"
-            r="70"
-            fill="#fecaca"
-            stroke="#dc2626"
-            stroke-width="6"
-        />
+            <!-- Atom B -->
+            <circle
+                cx="650"
+                cy="350"
+                r="70"
+                fill="#fecaca"
+                stroke="#dc2626"
+                stroke-width="6"
+            />
 
-        <!-- Bond -->
-        <line
-            x1="420"
-            y1="350"
-            x2="530"
-            y2="350"
-            stroke="#991b1b"
-            stroke-width="8"
-        />
+            <!-- Bond -->
+            <line
+                x1="420"
+                y1="350"
+                x2="580"
+                y2="350"
+                stroke="#991b1b"
+                stroke-width="8"
+            />
 
-        <text
-            x="350"
-            y="360"
-            text-anchor="middle"
-            font-size="27"
-            font-weight="bold"
-            fill="#991b1b"
-        >
-            A
-        </text>
+            <text
+                x="350"
+                y="360"
+                text-anchor="middle"
+                font-size="27"
+                font-weight="bold"
+                fill="#991b1b"
+            >
+                A
+            </text>
 
-        <text
-            x="600"
-            y="360"
-            text-anchor="middle"
-            font-size="27"
-            font-weight="bold"
-            fill="#991b1b"
-        >
-            B
-        </text>
+            <text
+                x="650"
+                y="360"
+                text-anchor="middle"
+                font-size="27"
+                font-weight="bold"
+                fill="#991b1b"
+            >
+                B
+            </text>
 
-        <text
-            x="475"
-            y="550"
-            text-anchor="middle"
-            font-size="30"
-            font-weight="bold"
-            fill="#111827"
-        >
-            Atoms → Bonds → Molecule
-        </text>
+            <text
+                x="500"
+                y="285"
+                text-anchor="middle"
+                font-size="22"
+                fill="#991b1b"
+            >
+                Chemical Bond
+            </text>
+
+            <text
+                x="500"
+                y="550"
+                text-anchor="middle"
+                font-size="29"
+                font-weight="bold"
+                fill="#111827"
+            >
+                Atoms → Bonds → Molecule
+            </text>
         """
 
-
-   
+    # ========================================================
     # COMPUTER SCIENCE
-   
+    # ========================================================
 
     elif "computer" in subject_lower:
 
         diagram = """
-        <!-- Input -->
-        <rect
-            x="150"
-            y="300"
-            width="220"
-            height="110"
-            rx="15"
-            fill="#cffafe"
-            stroke="#0891b2"
-            stroke-width="5"
-        />
+            <!-- Input -->
+            <rect
+                x="120"
+                y="300"
+                width="220"
+                height="110"
+                rx="15"
+                fill="#cffafe"
+                stroke="#0891b2"
+                stroke-width="5"
+            />
 
-        <text
-            x="260"
-            y="365"
-            text-anchor="middle"
-            font-size="28"
-            font-weight="bold"
-            fill="#155e75"
-        >
-            INPUT
-        </text>
+            <text
+                x="230"
+                y="365"
+                text-anchor="middle"
+                font-size="28"
+                font-weight="bold"
+                fill="#155e75"
+            >
+                INPUT
+            </text>
 
-        <!-- Arrow -->
-        <line
-            x1="370"
-            y1="355"
-            x2="470"
-            y2="355"
-            stroke="#0891b2"
-            stroke-width="7"
-        />
+            <!-- Arrow -->
+            <line
+                x1="340"
+                y1="355"
+                x2="470"
+                y2="355"
+                stroke="#0891b2"
+                stroke-width="7"
+            />
 
-        <polygon
-            points="470,355 445,340 445,370"
-            fill="#0891b2"
-        />
+            <polygon
+                points="470,355 445,340 445,370"
+                fill="#0891b2"
+            />
 
-        <!-- Process -->
-        <rect
-            x="470"
-            y="300"
-            width="220"
-            height="110"
-            rx="15"
-            fill="#e0f2fe"
-            stroke="#0891b2"
-            stroke-width="5"
-        />
+            <!-- Process -->
+            <rect
+                x="470"
+                y="300"
+                width="220"
+                height="110"
+                rx="15"
+                fill="#e0f2fe"
+                stroke="#0891b2"
+                stroke-width="5"
+            />
 
-        <text
-            x="580"
-            y="365"
-            text-anchor="middle"
-            font-size="28"
-            font-weight="bold"
-            fill="#155e75"
-        >
-            PROCESS
-        </text>
+            <text
+                x="580"
+                y="365"
+                text-anchor="middle"
+                font-size="28"
+                font-weight="bold"
+                fill="#155e75"
+            >
+                PROCESS
+            </text>
 
-        <!-- Arrow -->
-        <line
-            x1="690"
-            y1="355"
-            x2="790"
-            y2="355"
-            stroke="#0891b2"
-            stroke-width="7"
-        />
+            <!-- Arrow -->
+            <line
+                x1="690"
+                y1="355"
+                x2="820"
+                y2="355"
+                stroke="#0891b2"
+                stroke-width="7"
+            />
 
-        <polygon
-            points="790,355 765,340 765,370"
-            fill="#0891b2"
-        />
+            <polygon
+                points="820,355 795,340 795,370"
+                fill="#0891b2"
+            />
 
-        <!-- Output -->
-        <rect
-            x="790"
-            y="300"
-            width="220"
-            height="110"
-            rx="15"
-            fill="#cffafe"
-            stroke="#0891b2"
-            stroke-width="5"
-        />
+            <!-- Output -->
+            <rect
+                x="820"
+                y="300"
+                width="220"
+                height="110"
+                rx="15"
+                fill="#cffafe"
+                stroke="#0891b2"
+                stroke-width="5"
+            />
 
-        <text
-            x="900"
-            y="365"
-            text-anchor="middle"
-            font-size="28"
-            font-weight="bold"
-            fill="#155e75"
-        >
-            OUTPUT
-        </text>
+            <text
+                x="930"
+                y="365"
+                text-anchor="middle"
+                font-size="28"
+                font-weight="bold"
+                fill="#155e75"
+            >
+                OUTPUT
+            </text>
         """
 
-
+    # ========================================================
     # GENERIC SUBJECT
-  
+    # ========================================================
 
     else:
 
         diagram = """
-        <rect
-            x="350"
-            y="270"
-            width="300"
-            height="160"
-            rx="20"
-            fill="#eef2ff"
-            stroke="#4f46e5"
-            stroke-width="5"
-        />
+            <rect
+                x="350"
+                y="270"
+                width="580"
+                height="160"
+                rx="20"
+                fill="#eef2ff"
+                stroke="#4f46e5"
+                stroke-width="5"
+            />
 
-        <text
-            x="500"
-            y="360"
-            text-anchor="middle"
-            font-size="28"
-            font-weight="bold"
-            fill="#3730a3"
-        >
-            KEY CONCEPT
-        </text>
+            <text
+                x="640"
+                y="345"
+                text-anchor="middle"
+                font-size="29"
+                font-weight="bold"
+                fill="#3730a3"
+            >
+                KEY CONCEPT
+            </text>
 
-        <line
-            x1="500"
-            y1="430"
-            x2="500"
-            y2="490"
-            stroke="#4f46e5"
-            stroke-width="5"
-        />
-
-        <text
-            x="500"
-            y="540"
-            text-anchor="middle"
-            font-size="25"
-            fill="#111827"
-        >
-            Understand → Apply → Practice
-        </text>
+            <text
+                x="640"
+                y="395"
+                text-anchor="middle"
+                font-size="23"
+                fill="#374151"
+            >
+                Understand → Apply → Practice
+            </text>
         """
 
-
+    # ========================================================
     # COMPLETE SVG
-
+    # ========================================================
 
     filename = f"visual_{uuid.uuid4()}.svg"
-
     output_path = MEDIA_DIR / filename
 
     svg = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -1195,7 +1410,7 @@ def _create_svg_fallback(
     <!-- Subject -->
     <text
         x="640"
-        y="100"
+        y="90"
         text-anchor="middle"
         font-family="Arial, sans-serif"
         font-size="34"
@@ -1208,7 +1423,7 @@ def _create_svg_fallback(
     <!-- Topic -->
     <text
         x="640"
-        y="150"
+        y="135"
         text-anchor="middle"
         font-family="Arial, sans-serif"
         font-size="30"
@@ -1221,7 +1436,7 @@ def _create_svg_fallback(
     <!-- Grade and style -->
     <text
         x="640"
-        y="190"
+        y="172"
         text-anchor="middle"
         font-family="Arial, sans-serif"
         font-size="20"
@@ -1236,19 +1451,19 @@ def _create_svg_fallback(
     <!-- Concept box -->
     <rect
         x="100"
-        y="570"
+        y="590"
         width="1080"
-        height="75"
+        height="55"
         rx="15"
         fill="#f3f4f6"
     />
 
     <text
         x="640"
-        y="600"
+        y="614"
         text-anchor="middle"
         font-family="Arial, sans-serif"
-        font-size="19"
+        font-size="17"
         font-weight="bold"
         fill="#374151"
     >
@@ -1257,10 +1472,10 @@ def _create_svg_fallback(
 
     <text
         x="640"
-        y="628"
+        y="636"
         text-anchor="middle"
         font-family="Arial, sans-serif"
-        font-size="17"
+        font-size="16"
         fill="#4b5563"
     >
         {safe_concept}
@@ -1274,17 +1489,16 @@ def _create_svg_fallback(
         "w",
         encoding="utf-8"
     ) as svg_file:
-
         svg_file.write(svg)
 
-    print(
-        f"Fallback visual created: {output_path}"
-    )
+    print(f"Fallback visual created: {output_path}")
 
     return str(output_path)
 
 
+# ============================================================
 # MAIN VISUAL GENERATOR
+# ============================================================
 
 def generate_visual(
     subject: str,
@@ -1300,8 +1514,6 @@ def generate_visual(
     2. If Gemini fails or quota is exceeded,
        create a topic-aware SVG fallback.
     """
-
-    # Gemini prompt 
 
     prompt = f"""
 Create a unique educational visual for a personalized AI teacher.
@@ -1342,35 +1554,89 @@ IMPORTANT REQUIREMENTS:
 
 8. Make the visual useful for teaching the exact topic.
 
-9. If the topic is Harmonic Motion, show concepts such as:
-   - oscillation
-   - equilibrium position
-   - restoring force
-   - spring and mass
-   - periodic motion
+PHYSICS-SPECIFIC REQUIREMENTS:
 
-10. If the topic is Gravitation, show:
+9. If the topic is Newton's Third Law of Motion:
+   - Show TWO interacting objects.
+   - Clearly show the action force from object A on object B.
+   - Clearly show the reaction force from object B on object A.
+   - The forces must have equal magnitude.
+   - The forces must point in opposite directions.
+   - Make clear that the forces act on DIFFERENT objects.
+   - A person pushing a wall is a preferred example.
+   - Do NOT show the action and reaction forces as two forces
+     acting on the same object.
+   - Do NOT confuse Newton's Third Law with acceleration.
+
+10. If the topic is Harmonic Motion, show concepts such as:
+    - oscillation
+    - equilibrium position
+    - restoring force
+    - spring and mass
+    - periodic motion
+
+11. If the topic is Gravitation, show:
     - Earth
     - gravitational attraction
     - falling object
 
-11. If the topic is Waves, show:
+12. If the topic is Waves, show:
     - crest
     - trough
     - wavelength
     - amplitude
 
-12. If the topic is Electricity or Circuits, show:
+13. If the topic is Electricity or Circuits, show:
     - battery
     - wires
     - current
     - load/bulb
     - closed circuit
 
-13. Keep the visual clear and suitable for a classroom.
-"""
+14. Keep the visual clear and suitable for a classroom.
 
+15. Use large readable labels and avoid excessive text.
+"""
+    # ========================================================
+    # DETERMINISTIC PHYSICS VISUALS
+    # ========================================================
+    #
+    # For important physics concepts where exact relationships
+    # matter, use the deterministic SVG fallback.
+    #
+    # This guarantees that Newton's Third Law always shows
+    # equal and opposite forces acting on different objects.
+    # ========================================================
+
+    subject_lower = str(subject).lower().strip()
+    topic_lower = str(topic).lower().strip()
+
+    if (
+        "physics" in subject_lower
+        and "newton" in topic_lower
+        and (
+            "third" in topic_lower
+            or "3rd" in topic_lower
+            or "action" in topic_lower
+            or "reaction" in topic_lower
+        )
+    ):
+        print(
+            "Using deterministic Newton's Third Law educational visual."
+        )
+
+        return _create_svg_fallback(
+            subject=subject,
+            topic=topic,
+            grade=grade,
+            concept=concept,
+            style=style,
+        )
+
+    
+    # ========================================================
     # TRY GEMINI
+    # ========================================================
 
     try:
 
@@ -1399,7 +1665,6 @@ IMPORTANT REQUIREMENTS:
                 output_path,
                 "wb"
             ) as image_file:
-
                 image_file.write(image_data)
 
             print(
@@ -1408,15 +1673,16 @@ IMPORTANT REQUIREMENTS:
 
             return str(output_path)
 
-
     except Exception as e:
 
         print(
             f"Gemini visual generation unavailable: {e}"
         )
 
+    # ========================================================
     # FALLBACK
-  
+    # ========================================================
+
     return _create_svg_fallback(
         subject=subject,
         topic=topic,

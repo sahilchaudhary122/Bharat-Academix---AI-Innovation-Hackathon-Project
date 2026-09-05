@@ -21,9 +21,27 @@
         <div class="status">
             <span class="status-dot"></span>
             AI Teacher
+            <button id="theme-toggle" class="theme-toggle">🌙</button>
         </div>
     </header>
 
+
+    <!-- Login/Sign Up -->
+    <section id="auth-section" class="card">
+        <div class="section-title">
+            <span>🔑</span>
+            <h2 id="auth-title">Login</h2>
+        </div>
+        <form id="auth-form">
+            <input type="email" id="auth-email" placeholder="Email" required>
+            <input type="password" id="auth-password" placeholder="Password" required>
+            <button type="submit" id="auth-button">Login</button>
+        </form>
+        <p>
+            <span id="auth-toggle-text">Don't have an account?</span>
+            <button id="auth-toggle-button" type="button">Sign Up</button>
+        </p>
+    </section>
 
     <!-- Main Dashboard -->
     <main class="container">
@@ -106,14 +124,13 @@
 
         <!-- Previous Lessons -->
         <section id="lessons-section" class="card hidden">
-
-            <div class="section-title">
-                <span>📚</span>
-                <h2>Previous Lessons</h2>
-            </div>
-
-            <div id="lessons-container"></div>
-
+            <details>
+                <summary class="section-title">
+                    <span>📚</span>
+                    <h2>Previous Lessons</h2>
+                </summary>
+                <div id="lessons-container"></div>
+            </details>
         </section>
 
 
@@ -173,6 +190,17 @@
                         >
                     </div>
 
+                    <div class="form-group">
+                        <label for="language">Language</label>
+                        <select id="language">
+                            <option value="">Default (from Profile)</option>
+                            <option value="English">English</option>
+                            <option value="Hindi">Hindi</option>
+                            <option value="Spanish">Spanish</option>
+                            <option value="French">French</option>
+                        </select>
+                    </div>
+
                 </div>
 
 
@@ -226,6 +254,25 @@
 
                 </div>
 
+            </div>
+
+            <!-- Question/Answer Flow -->
+            <div id="qa-section" class="card hidden">
+                <div class="section-title">
+                    <span>❓</span>
+                    <h2>Check Your Understanding</h2>
+                </div>
+                <div id="question-container">
+                    <p id="question-text"></p>
+                    <input type="text" id="student-answer" placeholder="Type your answer here...">
+                    <button id="submit-answer-button">Submit Answer</button>
+                </div>
+                <div id="evaluation-container" class="hidden">
+                    <h3 id="evaluation-result"></h3>
+                    <p id="evaluation-feedback"></p>
+                    <p id="misconception-text" class="hidden"></p>
+                    <button id="next-step-button" class="hidden">Next Step</button>
+                </div>
             </div>
 
         </section>

@@ -2,6 +2,60 @@
    General
  */
 
+:root {
+    --bg-color: #f4f7fb;
+    --text-color: #1f2937;
+    --card-bg: #ffffff;
+    --card-border: #e5e7eb;
+    --header-bg: linear-gradient(135deg, #2563eb, #4f46e5);
+    --header-text: #ffffff;
+    --status-bg: rgba(255, 255, 255, 0.15);
+    --section-title: #111827;
+    --section-desc: #6b7280;
+    --profile-item-bg: #f8fafc;
+    --goal-bg: #eef2ff;
+    --goal-text: #3730a3;
+    --progress-bg: #e5e7eb;
+    --progress-fill: linear-gradient(90deg, #2563eb, #4f46e5);
+    --input-border: #d1d5db;
+    --input-focus: #4f46e5;
+    --objectives-bg: #f0fdf4;
+    --objectives-border: #bbf7d0;
+    --segment-bg: #f8fafc;
+    --segment-type-bg: #e0e7ff;
+    --segment-type-text: #3730a3;
+    --error-bg: #fef2f2;
+    --error-border: #fecaca;
+    --error-text: #b91c1c;
+}
+
+[data-theme="dark"] {
+    --bg-color: #111827;
+    --text-color: #f9fafb;
+    --card-bg: #1f2937;
+    --card-border: #374151;
+    --header-bg: linear-gradient(135deg, #1e3a8a, #312e81);
+    --header-text: #f9fafb;
+    --status-bg: rgba(0, 0, 0, 0.2);
+    --section-title: #f9fafb;
+    --section-desc: #9ca3af;
+    --profile-item-bg: #374151;
+    --goal-bg: #1e3a8a;
+    --goal-text: #e0e7ff;
+    --progress-bg: #374151;
+    --progress-fill: linear-gradient(90deg, #3b82f6, #6366f1);
+    --input-border: #4b5563;
+    --input-focus: #6366f1;
+    --objectives-bg: #064e3b;
+    --objectives-border: #065f46;
+    --segment-bg: #1f2937;
+    --segment-type-bg: #312e81;
+    --segment-type-text: #e0e7ff;
+    --error-bg: #450a0a;
+    --error-border: #7f1d1d;
+    --error-text: #fca5a5;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -10,9 +64,10 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-    background: #f4f7fb;
-    color: #1f2937;
+    background: var(--bg-color);
+    color: var(--text-color);
     line-height: 1.6;
+    transition: background 0.3s, color 0.3s;
 }
 
 
@@ -21,8 +76,8 @@ body {
  */
 
 .header {
-    background: linear-gradient(135deg, #2563eb, #4f46e5);
-    color: white;
+    background: var(--header-bg);
+    color: var(--header-text);
     padding: 28px 7%;
     display: flex;
     justify-content: space-between;
@@ -41,7 +96,7 @@ body {
 }
 
 .status {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--status-bg);
     padding: 9px 16px;
     border-radius: 30px;
     display: flex;
@@ -55,6 +110,25 @@ body {
     height: 9px;
     background: #22c55e;
     border-radius: 50%;
+}
+
+.theme-toggle {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    margin-left: 10px;
+}
+
+.theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 
@@ -73,12 +147,12 @@ body {
  */
 
 .card {
-    background: white;
+    background: var(--card-bg);
     border-radius: 16px;
     padding: 26px;
     margin-bottom: 25px;
     box-shadow: 0 5px 20px rgba(15, 23, 42, 0.06);
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--card-border);
 }
 
 .section-title {
@@ -94,11 +168,11 @@ body {
 
 .section-title h2 {
     font-size: 21px;
-    color: #111827;
+    color: var(--section-title);
 }
 
 .section-description {
-    color: #6b7280;
+    color: var(--section-desc);
     margin-bottom: 22px;
 }
 
@@ -114,34 +188,34 @@ body {
 }
 
 .profile-item {
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
+    background: var(--profile-item-bg);
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 16px;
 }
 
 .label {
     display: block;
-    color: #6b7280;
+    color: var(--section-desc);
     font-size: 13px;
     margin-bottom: 5px;
 }
 
 .profile-item strong {
     font-size: 16px;
-    color: #111827;
+    color: var(--section-title);
 }
 
 .learning-goal {
     margin-top: 18px;
     padding: 16px;
-    background: #eef2ff;
+    background: var(--goal-bg);
     border-radius: 12px;
 }
 
 .learning-goal p {
     font-weight: 500;
-    color: #3730a3;
+    color: var(--goal-text);
 }
 
 
@@ -150,7 +224,7 @@ body {
  */
 
 .progress-card {
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     padding: 18px;
     margin-bottom: 15px;
@@ -169,12 +243,12 @@ body {
 
 .mastery {
     font-weight: 700;
-    color: #2563eb;
+    color: var(--input-focus);
 }
 
 .progress-bar {
     height: 10px;
-    background: #e5e7eb;
+    background: var(--progress-bg);
     border-radius: 10px;
     overflow: hidden;
 }
@@ -182,7 +256,7 @@ body {
 .progress-fill {
     height: 100%;
     border-radius: 10px;
-    background: linear-gradient(90deg, #2563eb, #4f46e5);
+    background: var(--progress-fill);
 }
 
 .progress-details {
@@ -190,7 +264,7 @@ body {
     justify-content: space-between;
     margin-top: 10px;
     font-size: 14px;
-    color: #6b7280;
+    color: var(--section-desc);
 }
 
 
@@ -207,11 +281,11 @@ body {
 .assessment-table td {
     padding: 13px 10px;
     text-align: left;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--card-border);
 }
 
 .assessment-table th {
-    color: #6b7280;
+    color: var(--section-desc);
     font-size: 13px;
     text-transform: uppercase;
 }
@@ -233,13 +307,13 @@ body {
 
 .lesson-card {
     padding: 18px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--card-border);
     border-radius: 12px;
     margin-bottom: 14px;
 }
 
 .lesson-card h3 {
-    color: #111827;
+    color: var(--section-title);
     margin-bottom: 6px;
 }
 
@@ -247,7 +321,7 @@ body {
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
-    color: #6b7280;
+    color: var(--section-desc);
     font-size: 14px;
 }
 
@@ -257,7 +331,7 @@ body {
  */
 
 .lesson-generator {
-    border-top: 4px solid #4f46e5;
+    border-top: 4px solid var(--input-focus);
 }
 
 .form-grid {
@@ -277,15 +351,17 @@ body {
 .form-group input {
     width: 100%;
     padding: 12px 14px;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--input-border);
     border-radius: 9px;
     font-size: 15px;
     outline: none;
     transition: 0.2s;
+    background: var(--card-bg);
+    color: var(--text-color);
 }
 
 .form-group input:focus {
-    border-color: #4f46e5;
+    border-color: var(--input-focus);
     box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
@@ -294,7 +370,7 @@ body {
     padding: 14px;
     border: none;
     border-radius: 10px;
-    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    background: var(--header-bg);
     color: white;
     font-size: 16px;
     font-weight: 700;
@@ -321,7 +397,7 @@ body {
 .generated-lesson {
     margin-top: 30px;
     padding-top: 25px;
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid var(--card-border);
 }
 
 .generated-header {
@@ -336,16 +412,16 @@ body {
 }
 
 .generated-header h2 {
-    color: #111827;
+    color: var(--section-title);
 }
 
 .generated-header p {
-    color: #6b7280;
+    color: var(--section-desc);
 }
 
 .objectives {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
+    background: var(--objectives-bg);
+    border: 1px solid var(--objectives-border);
     border-radius: 12px;
     padding: 18px;
     margin-bottom: 25px;
@@ -360,8 +436,8 @@ body {
 }
 
 .segment {
-    border-left: 4px solid #4f46e5;
-    background: #f8fafc;
+    border-left: 4px solid var(--input-focus);
+    background: var(--segment-bg);
     padding: 18px;
     margin: 15px 0;
     border-radius: 0 12px 12px 0;
@@ -373,8 +449,8 @@ body {
 
 .segment-type {
     display: inline-block;
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--segment-type-bg);
+    color: var(--segment-type-text);
     padding: 3px 9px;
     border-radius: 20px;
     font-size: 12px;
@@ -382,12 +458,12 @@ body {
 }
 
 .segment p {
-    color: #4b5563;
+    color: var(--section-desc);
     margin-bottom: 7px;
 }
 
 .duration {
-    color: #6b7280;
+    color: var(--section-desc);
     font-size: 13px;
     font-weight: 600;
 }
@@ -400,13 +476,13 @@ body {
 .loading {
     text-align: center;
     padding: 40px;
-    color: #6b7280;
+    color: var(--section-desc);
 }
 
 .error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #b91c1c;
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
+    color: var(--error-text);
     padding: 15px;
     border-radius: 10px;
     margin-bottom: 20px;
@@ -422,7 +498,7 @@ body {
  */
 
 .empty {
-    color: #9ca3af;
+    color: var(--section-desc);
     text-align: center;
     padding: 20px;
 }
@@ -435,7 +511,7 @@ body {
 footer {
     text-align: center;
     padding: 30px;
-    color: #9ca3af;
+    color: var(--section-desc);
     font-size: 13px;
 }
 
